@@ -18,17 +18,17 @@ b = pi/2; # beta
 spm = manipulator.Coaxial_SPM(a1, a2, b)
 
 def main():
-    input_offset = 0 # add input offset to ensure joint angles at home position are zero (required when using first solution)
-    # Desired euler angle
-    x_rot = pi/6
-    y_rot = pi/12
-    z_rot = -2*pi/3
+    input_offset = 0 # add input offset  of pi to ensure joint angles at home position are zero
+    # Desired euler angle (ypr intrinsic rotation)
+    yaw = -pi/3
+    pitch = pi/6
+    roll = 0
     # Desired angular velocity (euler)
     x_vel = 0
     y_vel = 0
     z_vel = 0
 
-    desired_angle = np.array([x_rot, y_rot, z_rot])
+    desired_angle = np.array([yaw, pitch, roll])
     actuator_angles = spm.solve_ipk(desired_angle)
 
     desired_velocity = np.array([x_vel, y_vel, z_vel])

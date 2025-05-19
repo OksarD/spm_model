@@ -30,3 +30,18 @@ def wrap_rad(angle): # wraps between +/-pi
         return angle + pi*2
     else:
         return angle
+    
+def R_x(a):
+    return np.array([[1, 0, 0],
+                    [0, cos(a), -sin(a)],
+                    [0, sin(a), cos(a)]])
+
+def R_y(a):
+    return np.array([[cos(a), 0, sin(a)],
+                    [0, 1, 0],
+                    [-sin(a), 0, cos(a)]])
+
+def R_z(a):
+    return np.array([[cos(a), -sin(a), 0],
+                    [sin(a), cos(a), 0],
+                    [0, 0, 1]])

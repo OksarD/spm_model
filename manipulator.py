@@ -24,13 +24,11 @@ class Coaxial_SPM:
         self.v_fpk = None
         self.v_fpk = None
 
-    def R_euler(self, angle): # for euler angles
-        x_r = angle[0] # x rotation
-        y_r = angle[1] # y rotation
-        z_r = angle[2] # z rotation
-        return np.array([[cos(y_r)*cos(z_r), -cos(y_r)*sin(z_r), sin(y_r)],
-                        [cos(x_r)*sin(z_r)+sin(x_r)*sin(y_r)*cos(z_r), cos(x_r)*cos(z_r)-sin(x_r)*sin(y_r)*sin(z_r), -sin(x_r)*cos(y_r)],
-                        [sin(x_r)*sin(z_r)-cos(x_r)*sin(y_r)*cos(z_r), sin(x_r)*cos(z_r)+cos(x_r)*sin(y_r)*sin(z_r), cos(x_r)*cos(y_r)]])
+    def R_ypr(self, angle): # for euler angles
+        y = angle[0] # z rotation
+        p = angle[1] # y rotation
+        r = angle[2] # x rotation
+        return R_z(y) @ R_y(p) @ R_x(r)
 
     def eta_i(self, i):
         return 2*i*pi/3 # assume i = (0,1,2)
@@ -64,7 +62,7 @@ class Coaxial_SPM:
         return v_ix*cos(e_i)*sin(self.a1) + v_iy*sin(e_i)*sin(self.a1) - v_iz*cos(self.a1) - cos(self.a2)
     
     def solve_ipk(self, platform_angle):
-        R = self.R_euler(platform_angle)
+        R = self.R_ypr(platform_angle)
         self.v = [R@self.v_origin[i] for i in self.i_range]
         self.n = R@self.n_origin
         A = [self.A_i(self.v[i], i) for i in self.i_range]
