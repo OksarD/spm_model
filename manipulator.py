@@ -3,6 +3,8 @@ from numpy import pi, cos, sin, sqrt, acos
 import cmath
 from utils import *
 from math import degrees, radians, isclose
+from scipy import optimize
+from scipy.spatial.transform import Rotation
 
 class Coaxial_SPM:
     def __init__(self, a1, a2, b): # gamma assumed to be zero for coaxial spm
@@ -18,7 +20,9 @@ class Coaxial_SPM:
         self.n_origin = np.array([0, 0, 1]).T
         self.eta = [self.eta_i(i) for i in self.i_range]
         self.J = None
-
+        self.w_fpk = None
+        self.v_fpk = None
+        self.v_fpk = None
 
     def R_euler(self, angle): # for euler angles
         x_r = angle[0] # x rotation
@@ -59,7 +63,7 @@ class Coaxial_SPM:
         v_iz = v_i[2]
         return v_ix*cos(e_i)*sin(self.a1) + v_iy*sin(e_i)*sin(self.a1) - v_iz*cos(self.a1) - cos(self.a2)
     
-    def set_platform_position(self, platform_angle):
+    def solve_ipk(self, platform_angle):
         R = self.R_euler(platform_angle)
         self.v = [R@self.v_origin[i] for i in self.i_range]
         self.n = R@self.n_origin
@@ -84,7 +88,8 @@ class Coaxial_SPM:
             if invalid_param != None:
                 raise BaseException("Rotation invalid! paramater %s is incorrect" % invalid_param)
 
-    def set_platform_velocity(self, platform_velocity):
+    def solve_ivk(self, platform_angle, platform_velocity):
+        self.solve_ipk(platform_angle) # solve for w and v unit vectors at operting point
         A = np.array([np.cross(self.w[i], self.v[i]).T for i in self.i_range])
         B = np.diag([np.dot(np.cross(self.u, self.w[i]), self.v[i]) for i in self.i_range])
         self.J = np.linalg.inv(B)@A  
@@ -92,8 +97,42 @@ class Coaxial_SPM:
         print(platform_velocity.shape)
         return input_velocity
 
+    def fpk_system(self, v_out):
+        # Initialize residuals
+        r = np.zeros(9)
+        # rename variables for ease of use
+        v0_x = v_out[0]
+        v0_y = v_out[1]
+        v0_z = v_out[2]
+        v1_x = v_out[3]
+        v1_y = v_out[4]
+        v1_z = v_out[5]
+        v2_x = v_out[6]
+        v2_y = v_out[7]
+        v2_z = v_out[8]
+        # w[0][2] is w_0_y (first number is ith w vector, second number is xyz selection)
+        w = self.w_fpk
+        # angle to intermediate joint constraint
+        r[0] = w[0,0]*v0_x + w[0,1]*v0_y + w[0,2]*v0_z
+        r[1] = w[1,0]*v1_x + w[1,1]*v1_y + w[1,2]*v1_z
+        r[2] = w[2,0]*v2_x + w[2,1]*v2_y + w[2,2]*v2_z
+        # vector angular constraint
+        r[3] = v0_x*v1_x + v0_y*v1_y + v0_z*v1_z - cos(2*pi/3)
+        r[4] = v1_x*v2_x + v1_y*v2_y + v1_z*v2_z - cos(2*pi/3)
+        r[5] = v2_x*v0_x + v2_y*v0_y + v2_z*v0_z - cos(2*pi/3)
+        # unit vector magnitude constraint
+        r[6] = v0_x**2 + v0_y**2 + v0_z**2 - 1
+        r[7] = v1_x**2 + v1_y**2 + v1_z**2 - 1
+        r[8] = v2_x**2 + v2_y**2 + v2_z**2 - 1
+        return r
 
-
-        
-
-
+    def solve_fpk(self, input_angles):
+        init_v = [1,1,1,-1,-1,1,1,-1,1] # initial vector guess which corresponds to l-l-l configuration
+        init_r = [0,0,0] # initial rotation guess at the origin
+        # nonlinear canonical system of equations
+        self.w_fpk = np.array([self.w_i(input_angles[i], i) for i in self.i_range])
+        v_out = optimize.fsolve(func=self.fpk_system, x0=init_v)
+        self.v_fpk = np.array([v_out[i*3:i*3+3] for i in self.i_range])
+        rotation, rssd = Rotation.align_vectors(self.v_fpk, self.v_origin)
+        euler_angles = rotation.as_euler('xyz', degrees = True)
+        return euler_angles
