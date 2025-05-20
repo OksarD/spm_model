@@ -23,6 +23,8 @@ class Coaxial_SPM:
         self.w_fpk = None
         self.v_fpk = None
         self.v_fpk = None
+        self.actuator_origin = pi
+        self.actuator_direction = -1
 
     def R_ypr(self, angle): # for euler angles
         y = angle[0] # z rotation
@@ -69,7 +71,7 @@ class Coaxial_SPM:
         B = [self.B_i(self.v[i], i) for i in self.i_range]
         C = [self.C_i(self.v[i], i) for i in self.i_range]
         T = [solve_quadratic(A[i], B[i]*2, C[i])[0] for i in self.i_range] # we choose the first solution [0] because it lines up with the orientation of our manipulator
-        input_angle = [cmath.atan(T[i]).real*2 for i in self.i_range]  
+        input_angle = np.array([cmath.atan(T[i]).real*2 for i in self.i_range])
         self.w = [self.w_i(input_angle[i], i) for i in self.i_range] # intermediate joint unit vector
         self.verify_position()
         return input_angle
@@ -125,12 +127,14 @@ class Coaxial_SPM:
         return r
 
     def solve_fpk(self, input_angles):
+        # decouple yaw by subtracting first angle
+        yaw_offset = wrap_rad(self.actuator_direction*(input_angles[0] - self.actuator_origin))
+        print("In_0", degrees(yaw_offset))
+        offset_input_angles = input_angles + yaw_offset
         init_v = [1,1,1,-1,-1,1,1,-1,1] # initial vector guess which corresponds to l-l-l configuration
-        init_r = [0,0,0] # initial rotation guess at the origin
         # nonlinear canonical system of equations
-        self.w_fpk = np.array([self.w_i(input_angles[i], i) for i in self.i_range])
+        self.w_fpk = np.array([self.w_i(offset_input_angles[i], i) for i in self.i_range])
         v_out = optimize.fsolve(func=self.fpk_system, x0=init_v)
         self.v_fpk = np.array([v_out[i*3:i*3+3] for i in self.i_range])
-        rotation, rssd = Rotation.align_vectors(self.v_fpk, self.v_origin)
-        euler_angles = rotation.as_euler('xyz', degrees = True)
-        return euler_angles
+        self.v_fpk = [R_z(yaw_offset) @ self.v_fpk[i] for i in self.i_range]
+        return None

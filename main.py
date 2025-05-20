@@ -20,7 +20,7 @@ spm = manipulator.Coaxial_SPM(a1, a2, b)
 def main():
     input_offset = 0 # add input offset  of pi to ensure joint angles at home position are zero
     # Desired euler angle (ypr intrinsic rotation)
-    yaw = -pi/3
+    yaw = -pi/2
     pitch = pi/6
     roll = 0
     # Desired angular velocity (euler)
