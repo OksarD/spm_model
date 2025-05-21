@@ -1,5 +1,5 @@
 import numpy as np
-from numpy import pi, cos, sin, sqrt, acos
+from numpy import pi, cos, sin, sqrt, acos, atan2
 import cmath
 from utils import *
 from math import degrees, radians, isclose
@@ -27,10 +27,10 @@ class Coaxial_SPM:
         self.actuator_direction = -1
 
     def R_ypr(self, angle): # for euler angles
-        y = angle[0] # z rotation
-        p = angle[1] # y rotation
-        r = angle[2] # x rotation
-        return R_z(y) @ R_y(p) @ R_x(r)
+        yaw = angle[0] # z rotation
+        pitch = angle[1] # y rotation
+        roll = angle[2] # x rotation
+        return R_z(yaw) @ R_y(pitch) @ R_x(roll)
 
     def eta_i(self, i):
         return 2*i*pi/3 # assume i = (0,1,2)
@@ -63,6 +63,7 @@ class Coaxial_SPM:
         v_iz = v_i[2]
         return v_ix*cos(e_i)*sin(self.a1) + v_iy*sin(e_i)*sin(self.a1) - v_iz*cos(self.a1) - cos(self.a2)
     
+    # algebraically solves positional inverse kinematic problem
     def solve_ipk(self, platform_angle):
         R = self.R_ypr(platform_angle)
         self.v = [R@self.v_origin[i] for i in self.i_range]
@@ -76,6 +77,7 @@ class Coaxial_SPM:
         self.verify_position()
         return input_angle
     
+    # use system paramaters to verify if the current state is valid
     def verify_position(self):
         invalid_param = None
         for i in self.i_range:
@@ -87,7 +89,8 @@ class Coaxial_SPM:
                 invalid_param = "b"
             if invalid_param != None:
                 raise BaseException("Rotation invalid! paramater %s is incorrect" % invalid_param)
-
+    
+    # algebraically solves inverse velocity kinematic problem using Jacobian matrix
     def solve_ivk(self, platform_angle, platform_velocity):
         self.solve_ipk(platform_angle) # solve for w and v unit vectors at operting point
         A = np.array([np.cross(self.w[i], self.v[i]).T for i in self.i_range])
@@ -97,6 +100,7 @@ class Coaxial_SPM:
         print(platform_velocity.shape)
         return input_velocity
 
+    # quadratic system to solve fpk problem. Has eight solutions so the initial guess must be chosen carefully to ensure the correct solution is found
     def fpk_system(self, v_out):
         # Initialize residuals
         r = np.zeros(9)
@@ -126,6 +130,7 @@ class Coaxial_SPM:
         r[8] = v2_x**2 + v2_y**2 + v2_z**2 - 1
         return r
 
+    # numerically solves fpk problem
     def solve_fpk(self, input_angles):
         # decouple yaw by subtracting first angle
         yaw_offset = wrap_rad(self.actuator_direction*(input_angles[0] - self.actuator_origin))
@@ -137,4 +142,22 @@ class Coaxial_SPM:
         v_out = optimize.fsolve(func=self.fpk_system, x0=init_v)
         self.v_fpk = np.array([v_out[i*3:i*3+3] for i in self.i_range])
         self.v_fpk = [R_z(yaw_offset) @ self.v_fpk[i] for i in self.i_range]
-        return None
+        ypr = self.unwind_ypr(self.v_fpk)
+        return ypr
+    
+    # unwinds ypr angles from three-vector (v) platform representation. Angular range is -180 <= a < 180
+    def unwind_ypr(self, v_fpk):
+        normal_z = np.array([0,0,1])
+        # normal, pitch and roll axes in the body frame
+        normal = unit_vector(np.cross(v_fpk[0], v_fpk[1]))
+        pitch_ax = v_fpk[0]
+        roll_ax = -unit_vector(np.cross(normal, pitch_ax)) # minus puts the roll axis in the positive x direction
+        # using angle_between will not provide angles above 180, so the roll/pitch unwind range is limited to +/- 90 degrees
+        roll_projected_vector = unit_vector(project_to_plane(roll_ax, normal_z))
+        roll = pi/2 - angle_between(roll_projected_vector, pitch_ax) 
+        pitch_ax = R_axis(roll_ax, -roll) @ pitch_ax
+        pitch = -(pi/2 - angle_between(normal_z, roll_ax))
+        roll_ax = R_axis(pitch_ax, -pitch) @ roll_ax
+        # use trig values to convert unit vector to angle to avoid 180 degree constraint
+        yaw = atan2(roll_ax[1], roll_ax[0])
+        return np.array([yaw, pitch, roll])
