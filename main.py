@@ -1,13 +1,10 @@
 import numpy as np
-from numpy import pi, cos, sin, sqrt, acos, atan2
+from numpy import pi, cos, sin, sqrt, acos, atan2, degrees, radians
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import cmath
-from math import degrees, radians
-
 import manipulator
 from utils import *
 
+# Methods used to solve kinematics are derived from this paper:
 # https://link.springer.com/chapter/10.1007/978-3-030-75271-2_4
 
 # Parameters
@@ -16,6 +13,10 @@ a2 = pi/2; # alpha 2
 b = pi/2; # beta
 
 spm = manipulator.Coaxial_SPM(a1, a2, b)
+
+def plot_vector(p, colour, ax):
+    origin = np.array([0,0,0])
+    ax.quiver(*origin, p[0], p[1], p[2], color=colour, linewidths = 3)  # 'c' for color, 'marker' for shape
 
 def main():
 
@@ -49,12 +50,12 @@ def main():
         print("Joint %i" % i)
         print("Actuator angle (deg): %.2f" % degrees(wrap_rad(actuator_angles[i] + input_offset)))
         print("Actuator velocity (deg/s): %.2f" % degrees(actuator_velocity[i]))
-        print("fpk ypr: %.2f" % degrees(fpk_angle[i]))
         #plot_vector(spm.v[i], v_colours[i], ax)
         plot_vector(spm.w[i], w_colours[i], ax)
         plot_vector(spm.v_fpk[i], fpk_v_colours[i], ax)
 
-    #print("Rotation:", fpk_platform_angle)
+    print("fpk ypr:", degrees(fpk_angle))
+
     ax.set_xlabel('X Axis')
     ax.set_ylabel('Y Axis')
     ax.set_zlabel('Z Axis')

@@ -1,8 +1,7 @@
 import numpy as np
-from numpy import pi, cos, sin, sqrt, acos, atan2
+from numpy import pi, cos, sin, sqrt, acos, atan2, isclose
 import cmath
 from utils import *
-from math import degrees, radians, isclose
 from scipy import optimize
 from scipy.spatial.transform import Rotation
 
@@ -134,7 +133,6 @@ class Coaxial_SPM:
     def solve_fpk(self, input_angles):
         # decouple yaw by subtracting first angle
         yaw_offset = wrap_rad(self.actuator_direction*(input_angles[0] - self.actuator_origin))
-        print("In_0", degrees(yaw_offset))
         offset_input_angles = input_angles + yaw_offset
         init_v = [1,1,1,-1,-1,1,1,-1,1] # initial vector guess which corresponds to l-l-l configuration
         # nonlinear canonical system of equations
