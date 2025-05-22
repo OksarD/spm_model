@@ -145,16 +145,14 @@ class Coaxial_SPM:
         v_out = optimize.fsolve(func=self.fpk_system, x0=init_v)
         self.v_fpk = np.array([v_out[i*3:i*3+3] for i in self.i_range])
         self.v_fpk = [R_z(yaw_offset) @ self.v_fpk[i] for i in self.i_range]
-        R = R_orthonormal(self.get_orthonormals(self.v_fpk))
-        return R
+        ypr = self.unwind_ypr(self.v_fpk)
+        return ypr
     
     # unwinds ypr angles from three-vector (v) platform representation. Angular range is -180 <= a < 180
     def unwind_ypr(self, v):
-        normal_z = np.array([0,0,1])
         # normal, pitch and roll axes in the body frame
-        normal = unit_vector(np.cross(v[0], v[1]))
-        pitch_ax = v[0]
-        roll_ax = -unit_vector(np.cross(normal, pitch_ax)) # minus puts the roll axis in the positive x direction
+        roll_ax, pitch_ax, normal = self.get_orthonormals(v)
+        normal_z = np.array([0,0,1])
         # using angle_between will not provide angles above 180, so the roll/pitch unwind range is limited to +/- 90 degrees
         roll_projected_vector = unit_vector(project_to_plane(roll_ax, normal_z))
         roll = pi/2 - angle_between(roll_projected_vector, pitch_ax) 
@@ -169,5 +167,21 @@ class Coaxial_SPM:
     def get_orthonormals(self, v):
         y_v = v[0]
         z_v = unit_vector(np.cross(v[0], v[1]))
+        # minus puts the x axis in the positive x direction
         x_v = -unit_vector(np.cross(z_v, y_v))
         return x_v, y_v, z_v
+    
+    def ypr_to_xyz_velocity(self, ypr_velocity, ypr_point):
+        # https://physics.stackexchange.com/questions/492906/application-of-angular-velocity-to-euler-angles
+        yaw_v = ypr_velocity[0]
+        pitch_v = ypr_velocity[1]
+        roll_v = ypr_velocity[2]
+        yaw = ypr_point[0]
+        pitch = ypr_point[1]
+        x = np.array([1,0,0])
+        y = np.array([0,1,0])
+        z = np.array([0,0,1])
+        E_yaw = R_z(yaw)
+        E_pitch = E_yaw@R_y(pitch)
+        w = yaw_v*z + pitch_v*(E_yaw@y) + roll_v*(E_pitch@x)
+        return w
