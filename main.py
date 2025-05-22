@@ -19,43 +19,55 @@ def plot_vector(p, colour, ax):
     ax.quiver(*origin, p[0], p[1], p[2], color=colour, linewidths = 3)  # 'c' for color, 'marker' for shape
 
 def main():
-
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
-    input_offset = 0 # add input offset  of pi to ensure joint angles at home position are zero
-    # Desired euler angle (ypr intrinsic rotation) anglular range is 180 <= a < 180
-    yaw = pi/4
-    pitch = pi/6
-    roll = -pi/12
-    # Desired angular velocity (euler)
-    x_vel = 0
-    y_vel = 0
-    z_vel = 0
+    # Desired angle
 
-    desired_angle = np.array([yaw, pitch, roll])
-    actuator_angles = spm.solve_ipk(desired_angle)
+    # yaw = pi/4
+    # pitch = pi/6
+    # roll = -pi/12
+    x = 1
+    y = 1
+    z = 0
+    a = pi/6
+    axis = unit_vector(np.array([x,y,z]))
+    desired_rotation = R_axis(axis, a)
 
-    desired_velocity = np.array([x_vel, y_vel, z_vel])
-    actuator_velocity = spm.solve_ivk(desired_angle, desired_velocity)
-    fpk_angle = spm.solve_fpk(actuator_angles)
+    # Desired angular velocity w = (w_x,w_y,w_z)
+    w_x = 0
+    w_y = 0
+    w_z = 0
+    desired_velocity = np.array([w_x, w_y, w_z])
 
+    # solve kinematics
+    actuator_angles = spm.solve_ipk(desired_rotation)
+    actuator_velocity = spm.solve_ivk(desired_rotation, desired_velocity)
+    fpk_rotation = spm.solve_fpk(actuator_angles)
+
+    # Display resulting vectors
     v_colours = ['r', 'g', 'b']
     w_colours = ['darkred', 'darkgreen', 'darkblue']
     fpk_v_colours = ['c', 'm', 'y']
-
+    plot_vector(axis, 'gray', ax)
     plot_vector(spm.u, 'black', ax)
    
     for i in spm.i_range:
+        # print actuator state
         print("Joint %i" % i)
-        print("Actuator angle (deg): %.2f" % degrees(wrap_rad(actuator_angles[i] + input_offset)))
+        print("Actuator angle (deg): %.2f" % degrees(actuator_angles[i]))
         print("Actuator velocity (deg/s): %.2f" % degrees(actuator_velocity[i]))
-        #plot_vector(spm.v[i], v_colours[i], ax)
+        plot_vector(spm.v[i], v_colours[i], ax)
         plot_vector(spm.w[i], w_colours[i], ax)
         plot_vector(spm.v_fpk[i], fpk_v_colours[i], ax)
 
-    print("fpk ypr:", degrees(fpk_angle))
+    # verify positional kinematics with matching rotation matrices
+    print("desired_r_matrix:")
+    print(desired_rotation)
+    print("fpk_r_matrix:")
+    print(fpk_rotation)
 
+    # plot graph
     ax.set_xlabel('X Axis')
     ax.set_ylabel('Y Axis')
     ax.set_zlabel('Z Axis')
