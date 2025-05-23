@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import manipulator
 from utils import *
 
+np.set_printoptions(formatter={'float': '{:.3f}'.format})
+
 # Methods used to solve kinematics are derived from this paper:
 # https://link.springer.com/chapter/10.1007/978-3-030-75271-2_4
 
@@ -22,16 +24,16 @@ def main():
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
-    # Desired angle in ypr
-    yaw = pi/4
-    pitch = pi/6
-    roll = -pi/12
-    ypr = np.array([yaw,pitch,roll])
+    # Desired angle in ypr (rad/s)
+    yaw = pi
+    pitch = 0
+    roll = 0
+    ypr = np.array([wrap_rad(yaw),wrap_rad(pitch),wrap_rad(roll)])
     R_ypr = spm.R_ypr(ypr)
 
-    # Desired angular velocity in ypr
+    # Desired angular velocity in ypr (rad/s)
     w_yaw = 1
-    w_pitch = 1
+    w_pitch = -1
     w_roll = 1
     w_ypr = np.array([w_yaw, w_pitch, w_roll])
     w_xyz = spm.ypr_to_xyz_velocity(w_ypr, ypr)
@@ -45,13 +47,15 @@ def main():
     print("desired_ypr:", ypr)
     print("fpk_ypr:", ypr_fpk)
 
-    # verify Jacobian and ypr_to_xyz transformation functions with matching actuator angles
-    epsilon = 1e-3 # arbitrarily small angular positional change
-    dt = np.array([epsilon/w_ypr[i] for i in spm.i_range])
+    # verify Jacobian and ypr_to_xyz transformation functions with a 
+    # discrete approximation based on positional kinematics
+    dt_epsilon = 1e-6 # arbitrarily small time change
+    ypr_f = [ypr[i] + w_ypr[i]*dt_epsilon for i in spm.i_range]
     a_i = spm.solve_ipk(spm.R_ypr(ypr))
-    a_f = spm.solve_ipk(spm.R_ypr(ypr + epsilon))
-    actuator_velocity_epsilon = (a_f - a_i)/dt
-    print("discrete actuator velocity", actuator_velocity_epsilon)
+    a_f = spm.solve_ipk(spm.R_ypr(ypr_f))
+    a_delta = np.array([closest_angular_delta(a_f[i],a_i[i]) for i in spm.i_range])
+    actuator_velocity_approx = a_delta/dt_epsilon
+    print("approx actuator velocity", actuator_velocity_approx)
     print("Jacobian actuator velocity", actuator_velocity)
 
     # Display resulting vectors

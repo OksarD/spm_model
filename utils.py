@@ -1,5 +1,5 @@
 import numpy as np
-from numpy import pi, cos, sin, sqrt, acos
+from numpy import pi, cos, sin, sqrt, acos, degrees, radians
 import cmath
 
 # solve quadratic equation returning two complex numbers (even is the root is repreated)
@@ -23,9 +23,9 @@ def angle_between(a, b):
 
 # wraps between -pi <= angle < pi
 def wrap_rad(angle): 
-    if angle > pi:
+    if angle >= pi:
         return angle - pi*2
-    elif angle <= -pi:
+    elif angle < -pi:
         return angle + pi*2
     else:
         return angle
@@ -70,3 +70,10 @@ def project_to_plane(normal_vector, projected_vector):
 # get rotation matrix based on a 3-element list of orthonormal body vectors
 def R_orthonormal(o_v):
     return np.array([o_v[0], o_v[1], o_v[2]]).T
+
+# calculates a2 - a1 and accounts for angular discontiuity by choosing the value closest to zero
+def closest_angular_delta(a_2, a_1):
+    opt = [a_2 - a_1 + 2*pi, 
+            a_2 - a_1 - 2*pi, 
+            a_2 - a_1]
+    return min(opt, key=abs)
