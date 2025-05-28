@@ -1,7 +1,6 @@
 % unwinds ypr angles from three-vector (v) platform representation. Angular range is -180 <= a < 180
-function ypr = unwind_ypr(v)
+function ypr = unwind_ypr(ortho)
     % normal, pitch and roll axes in the body frame
-    ortho = get_orthonormals(v);
     roll_ax = ortho(1,:);
     pitch_ax = ortho(2,:);
     normal_z = [0,0,1];
