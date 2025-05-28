@@ -1,4 +1,4 @@
-classdef coax_spm
+classdef coax_spm < handle
     properties
         a1
         a2
@@ -11,7 +11,6 @@ classdef coax_spm
         v_origin
         n_origin
         eta
-        J
         w_fpk
         v_fpk
         actuator_origin
@@ -35,7 +34,6 @@ classdef coax_spm
             for i = obj.i_range
                 obj.eta{i+1} = obj.eta_i(i);
             end
-            obj.J = [];
             obj.w_fpk = [];
             obj.v_fpk = [];
             obj.actuator_origin = pi;
@@ -85,43 +83,45 @@ classdef coax_spm
                 obj.v{i+1} = r * obj.v_origin{i+1};
             end
             obj.n = r * obj.n_origin;
-            T = zeros(3,2)
+            T = zeros(3,2);
             for i = obj.i_range
-                A_ = obj.A_i_ipk(obj.v{i+1}, i)
-                B_= obj.B_i_ipk(obj.v{i+1}, i)
-                C_ = obj.C_i_ipk(obj.v{i+1}, i)
-                T(i+1,:) = solve_quadratic(A_, 2 * B_, C_)
+                A_ = obj.A_i_ipk(obj.v{i+1}, i);
+                B_= obj.B_i_ipk(obj.v{i+1}, i);
+                C_ = obj.C_i_ipk(obj.v{i+1}, i);
+                T(i+1,:) = solve_quadratic(A_, 2 * B_, C_);
             end
-            T_solution = T(:,1)
+            T_solution = T(:,1);
             input_angle = real(2 * atan(T_solution));
             for i = obj.i_range
                 obj.w{i+1} = obj.w_i(input_angle(i+1), i);
             end
-            % obj.verify_position();
+            obj.verify_position();
         end
 
-        % function obj = verify_position(obj)
-        %     for i = obj.i_range
-        %         if ~isclose(angle_between(obj.u, obj.w{i+1}), obj.a1)
-        %             error('Rotation invalid! parameter a1 is incorrect');
-        %         elseif ~isclose(angle_between(obj.w{i+1}, obj.v{i+1}), obj.a2)
-        %             error('Rotation invalid! parameter a2 is incorrect');
-        %         elseif ~isclose(angle_between(obj.v{i+1}, obj.n), obj.b)
-        %             error('Rotation invalid! parameter b is incorrect');
-        %         end
-        %     end
-        % end
+        function obj = verify_position(obj)
+            for i = obj.i_range
+                if isclose(angle_between(obj.u, obj.w{i+1}), obj.a1) == false
+                    error('Rotation invalid! parameter a1 is incorrect');
+                elseif isclose(angle_between(obj.w{i+1}, obj.v{i+1}), obj.a2) == false
+                    error('Rotation invalid! parameter a2 is incorrect');
+                elseif isclose(angle_between(obj.v{i+1}, obj.n), obj.b) == false
+                    error('Rotation invalid! parameter b is incorrect');
+                end
+            end
+        end
 
-        function input_velocity = solve_ivk(obj, platform_angle, platform_velocity)
-            [~, obj] = obj.solve_ipk(platform_angle);
+        function w_actuator = solve_ivk(obj, ypr, w_ypr)
+            w_xyz = ypr_to_xyz_velocity(w_ypr, ypr)
+            r_ypr = rotz(ypr(1)) * roty(ypr(2)) * rotx(ypr(3));
+            act_angle = solve_ipk(obj, r_ypr)
             A = zeros(3,3);
             B = zeros(3,3);
             for i = obj.i_range
-                A(i+1, :) = cross(obj.w{i+1}, obj.v{i+1})';
-                B(i+1, i+1) = dot(cross(obj.u, obj.w{i+1}), obj.v{i+1});
+                A(i+1, :) = cross(obj.w{i+1}, obj.v{i+1})'
+                B(i+1, i+1) = dot(cross(obj.u, obj.w{i+1}), obj.v{i+1})
             end
-            obj.J = inv(B) * A;
-            input_velocity = obj.J * platform_velocity';
+            J = B\A
+            w_actuator = J * w_xyz;
         end
 
         function r = fpk_system(obj, v_out)

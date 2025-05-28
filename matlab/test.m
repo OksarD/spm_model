@@ -10,5 +10,6 @@ w_ypr = [1,1,1]
 w_xyz = ypr_to_xyz_velocity(w_ypr, ypr)
 r_ypr = rotz(ypr(1)) * roty(ypr(2)) * rotx(ypr(3))
 
-input_angle = solve_ipk(spm, r_ypr)
+%input_angle = solve_ipk(spm, r_ypr) % only ised inside solve_ivk
+actuator_velocity = solve_ivk(spm, ypr, w_ypr)
 

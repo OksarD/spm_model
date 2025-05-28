@@ -69,8 +69,8 @@ def main():
     for i in spm.i_range:
         # print actuator state
         print("Joint %i" % i)
-        print("Actuator angle (deg): %.2f" % (actuator_angles[i]))
-        print("Actuator velocity (deg/s): %.2f" % (actuator_velocity[i]))
+        print("Actuator angle: %.2f" % (actuator_angles[i]))
+        print("Actuator velocity: %.2f" % (actuator_velocity[i]))
         plot_vector(spm.v[i], v_colours[i], ax)
         plot_vector(spm.w[i], w_colours[i], ax)
         plot_vector(spm.v_fpk[i], fpk_v_colours[i], ax)

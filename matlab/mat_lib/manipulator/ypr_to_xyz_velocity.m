@@ -10,5 +10,5 @@ function w_xyz = ypr_to_xyz_velocity(w_ypr, ypr)
     z = [0; 0; 1];
     E_yaw = rotz(yaw);
     E_pitch = E_yaw*roty(pitch);
-    w_xyz = w_yaw*z + w_pitch*(E_yaw*y) + w_roll*(E_pitch*x);
+    w_xyz = (w_yaw*z + w_pitch*(E_yaw*y) + w_roll*(E_pitch*x));
 end

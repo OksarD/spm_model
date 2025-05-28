@@ -99,10 +99,18 @@ class Coaxial_SPM:
     def solve_ivk(self, platform_angle, platform_velocity):
         self.solve_ipk(platform_angle) # solve for w and v unit vectors at operting point
         A = np.array([np.cross(self.w[i], self.v[i]).T for i in self.i_range])
+        print("A")
+        print(A)
         B = np.diag([np.dot(np.cross(self.u, self.w[i]), self.v[i]) for i in self.i_range])
+        print("B:")
+        print(B)
         self.J = np.linalg.inv(B)@A  
+        print("J:")
+        print(self.J)
         input_velocity = self.J@platform_velocity.T
         return input_velocity
+
+
 
     # quadratic system to solve fpk problem. Has eight solutions so the initial guess must be chosen carefully to ensure the correct solution is found
     def fpk_system(self, v_out):
