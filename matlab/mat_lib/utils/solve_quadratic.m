@@ -1,6 +1,6 @@
 function res = solve_quadratic(a, b, c)
     discriminant = b^2 - 4*a*c;
-    sqrt_discriminant = sqrt(discriminant);
+    sqrt_discriminant = sqrt(complex(discriminant));
     root1 = (-b + sqrt_discriminant) / (2*a);
     root2 = (-b - sqrt_discriminant) / (2*a);
     res = [root1, root2];

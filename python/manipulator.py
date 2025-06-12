@@ -146,6 +146,7 @@ class Coaxial_SPM:
     def solve_fpk(self, input_angles):
         # decouple yaw by subtracting first angle
         yaw_offset = wrap_rad(self.actuator_direction*(input_angles[0] - self.actuator_origin))
+        print("yaw_offset", yaw_offset)
         offset_input_angles = input_angles + yaw_offset
         init_v = [1,1,1,-1,-1,1,1,-1,1] # initial vector guess which corresponds to l-l-l configuration
         # nonlinear canonical system of equations
