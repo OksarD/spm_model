@@ -2,3 +2,5 @@
 __pycache__/
 
 matlab/slprj
+cpp/libs/
+cpp/a.exe

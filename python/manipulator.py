@@ -98,6 +98,8 @@ class Coaxial_SPM:
     # algebraically solves inverse velocity kinematic problem using Jacobian matrix
     def solve_ivk(self, platform_angle, platform_velocity):
         self.solve_ipk(platform_angle) # solve for w and v unit vectors at operting point
+        print("v\n", self.v)
+        print("w\n", self.w)
         A = np.array([np.cross(self.w[i], self.v[i]).T for i in self.i_range])
         print("A")
         print(A)
@@ -154,8 +156,8 @@ class Coaxial_SPM:
         v_out = optimize.fsolve(func=self.fpk_system, x0=init_v)
         self.v_fpk = np.array([v_out[i*3:i*3+3] for i in self.i_range])
         self.v_fpk = [R_z(yaw_offset) @ self.v_fpk[i] for i in self.i_range]
-        print("v_fpk")
-        print(self.v_fpk)
+        # print("v_fpk")
+        # print(self.v_fpk)
         ypr = self.unwind_ypr(self.v_fpk)
         return ypr
     
@@ -163,19 +165,19 @@ class Coaxial_SPM:
     def unwind_ypr(self, v):
         # normal, pitch and roll axes in the body frame
         roll_ax, pitch_ax, normal = self.get_orthonormals(v)
-        print("r_ax, p_ax", roll_ax, pitch_ax)
+        #print("r_ax, p_ax", roll_ax, pitch_ax)
         normal_z = np.array([0,0,1])
         # using angle_between will not provide angles above 180, so the roll/pitch unwind range is limited to +/- 90 degrees
         roll_projected_vector = unit_vector(project_to_plane(roll_ax, normal_z))
-        print('roll_proj_v', roll_projected_vector)
+        #print('roll_proj_v', roll_projected_vector)
         roll = pi/2 - angle_between(roll_projected_vector, pitch_ax)
-        print("roll", roll) 
+        #print("roll", roll) 
         pitch_ax = R_axis(roll_ax, -roll) @ pitch_ax
-        print("pitch_ax", pitch_ax)
+        #print("pitch_ax", pitch_ax)
         pitch = -(pi/2 - angle_between(normal_z, roll_ax))
-        print("pitch", pitch)
+        #print("pitch", pitch)
         roll_ax = R_axis(pitch_ax, -pitch) @ roll_ax
-        print("roll_ax", roll_ax)
+        #print("roll_ax", roll_ax)
         # use trig values to convert unit vector to angle to avoid 180 degree constraint
         yaw = atan2(roll_ax[1], roll_ax[0])
         return np.array([yaw, pitch, roll])
