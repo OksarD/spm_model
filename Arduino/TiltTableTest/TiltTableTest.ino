@@ -91,18 +91,18 @@ void enable_motors(){
 }
 
 long input_angles(const char* command){
-  Serial.print("R input: ");
+  Serial.println("R input: ");
   r_input = ExtractValue(command, 'R');
-  Serial.print("P input: ");
+  Serial.println("P input: ");
   p_input = ExtractValue(command, 'P');
-  Serial.print("Y input: ");
+  Serial.println("Y input: ");
   y_input = ExtractValue(command, 'Y');
-  Serial.print("dR input: ");
-  dr_input = ExtractValue(command, 'E');
-  Serial.print("dP input: ");
-  dp_input = ExtractValue(command, 'O');
-  Serial.print("dY input: ");
-  dy_input = ExtractValue(command, 'T');
+  Serial.println("dR input: ");
+  dr_input = ExtractValue(command, 'r');
+  Serial.println("dP input: ");
+  dp_input = ExtractValue(command, 'p');
+  Serial.println("dY input: ");
+  dy_input = ExtractValue(command, 'y');
 }
 
 void show_command(){
@@ -151,10 +151,10 @@ void loop() {
       Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_platform_velocity, ypr);
       Vector3f input_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
 
-      Serial.print("Actuator Velocity ");
-      Serial.print(input_velocity[0]);
-      Serial.print(input_velocity[1]);
-      Serial.print(input_velocity[2]);
+      Serial.print("Actuator Velocity");
+      Serial.println(input_velocity[0]);
+      Serial.println(input_velocity[1]);
+      Serial.println(input_velocity[2]);
       // convert actuator velocity (rad/s) to stepper velocity (steps/s)
       float m1_speed = actuator_to_motor_speed(input_velocity[0]);
       float m2_speed = actuator_to_motor_speed(input_velocity[1]);

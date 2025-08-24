@@ -31,25 +31,31 @@ float wrap_rad(float angle) {
 }
 
 Matrix3f R_x(float a) {
+    float sin_a = sin(a);
+    float cos_a = cos(a);
     Matrix3f R;
     R << 1, 0, 0,
-         0, cos(a), -sin(a),
-         0, sin(a), cos(a);
+         0, cos_a, -sin_a,
+         0, sin_a, cos_a;
     return R;
 }
 
 Matrix3f R_y(float a) {
+    float sin_a = sin(a);
+    float cos_a = cos(a);
     Matrix3f R;
-    R << cos(a), 0, sin(a),
+    R << cos_a, 0, sin_a,
          0, 1, 0,
-        -sin(a), 0, cos(a);
+        -sin_a, 0, cos_a;
     return R;
 }
 
 Matrix3f R_z(float a) {
+    float sin_a = sin(a);
+    float cos_a = cos(a);
     Matrix3f R;
-    R << cos(a), -sin(a), 0,
-         sin(a), cos(a), 0,
+    R << cos_a, -sin_a, 0,
+         sin_a, cos_a, 0,
          0, 0, 1;
     return R;
 }
@@ -75,9 +81,18 @@ Coaxial_SPM::Coaxial_SPM(float a1_, float a2_, float b_)
       sin_b(sin(b_)), cos_b(cos(b_))
 {
     for (int i=0; i<3; i++) {
-        v_origin.push_back(v_i_origin(i));
         eta.push_back(eta_i(i));
+        v_origin.push_back(v_i_origin(i));
+        sin_eta.push_back(sin(eta_i(i)));
+        cos_eta.push_back(cos(eta_i(i)));
     }
+}
+
+Vector3f Coaxial_SPM::v_i_origin(int i) {
+    float e = eta_i(i);
+    return Vector3f(-sin(e)*sin_b,
+                     cos(e)*sin_b,
+                     cos_b);
 }
 
 Matrix3f Coaxial_SPM::R_ypr(const Vector3f& angle) {
@@ -89,32 +104,21 @@ float Coaxial_SPM::eta_i(int i) {
 }
 
 Vector3f Coaxial_SPM::w_i(float in_i, int i) {
-    float e = eta_i(i);
-    return Vector3f(cos(e-in_i)*sin_a1,
-                    sin(e-in_i)*sin_a1,
+    return Vector3f(cos(eta[i]-in_i)*sin_a1,
+                    sin(eta[i]-in_i)*sin_a1,
                     -cos_a1);
 }
 
-Vector3f Coaxial_SPM::v_i_origin(int i) {
-    float e = eta_i(i);
-    return Vector3f(-sin(e)*sin_b,
-                     cos(e)*sin_b,
-                     cos_b);
-}
-
 float Coaxial_SPM::A_i_ipk(const Vector3f& vi, int i) {
-    float e = eta_i(i);
-    return -vi(0)*cos(e)*sin_a1 - vi(1)*sin(e)*sin_a1 - vi(2)*cos_a1 - cos_a2;
+    return -vi(0)*cos_eta[i]*sin_a1 - vi(1)*sin_eta[i]*sin_a1 - vi(2)*cos_a1 - cos_a2;
 }
 
 float Coaxial_SPM::B_i_ipk(const Vector3f& vi, int i) {
-    float e = eta_i(i);
-    return vi(0)*sin(e)*sin_a1 - vi(1)*cos(e)*sin_a1;
+    return vi(0)*sin_eta[i]*sin_a1 - vi(1)*cos_eta[i]*sin_a1;
 }
 
 float Coaxial_SPM::C_i_ipk(const Vector3f& vi, int i) {
-    float e = eta_i(i);
-    return vi(0)*cos(e)*sin_a1 + vi(1)*sin(e)*sin_a1 - vi(2)*cos_a1 - cos_a2;
+    return vi(0)*cos_eta[i]*sin_a1 + vi(1)*sin_eta[i]*sin_a1 - vi(2)*cos_a1 - cos_a2;
 }
 
 Vector3f Coaxial_SPM::solve_ipk(const Matrix3f& r) {
@@ -147,11 +151,11 @@ Vector3f Coaxial_SPM::solve_ipk(const Matrix3f& r) {
 void Coaxial_SPM::verify_position() {
     for (int i=0; i<3; i++) {
         if (!isclose(angle_between(u, w[i]), a1))
-            Serial.println("Rotation invalid! param a1 incorrect");
+            cout <<"Rotation invalid! param a1 incorrect" << endl;
         if (!isclose(angle_between(w[i], v[i]), a2))
-            Serial.println("Rotation invalid! param a2 incorrect");
+            cout << "Rotation invalid! param a2 incorrect" << endl;
         if (!isclose(angle_between(v[i], n), b))
-            Serial.println("Rotation invalid! param b incorrect");
+            cout << "Rotation invalid! param b incorrect" << endl;
     }
 }
 

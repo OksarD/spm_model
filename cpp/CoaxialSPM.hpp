@@ -8,74 +8,76 @@
 using namespace Eigen;
 using namespace std;
 
-constexpr double PI = 3.1415926535897932384;
-
 // ================== Utility Functions ================== //
 
 // Quadratic solver
-pair<complex<double>, complex<double>> solve_quadratic(double a, double b, double c);
+pair<complex<float>, complex<float>> solve_quadratic(float a, float b, float c);
 
 // Normalize vector
-Vector3d unit_vector(const Vector3d& v);
+Vector3f unit_vector(const Vector3f& v);
 
 // Angle between vectors
-double angle_between(const Vector3d& a, const Vector3d& b);
+float angle_between(const Vector3f& a, const Vector3f& b);
 
 // Wrap radians [-pi, pi)
-double wrap_rad(double angle);
+float wrap_rad(float angle);
 
 // Rotation matrices
-Matrix3d R_x(double a);
-Matrix3d R_y(double a);
-Matrix3d R_z(double a);
-Matrix3d R_axis(const Vector3d& axis, double angle);
+Matrix3f R_x(float a);
+Matrix3f R_y(float a);
+Matrix3f R_z(float a);
+Matrix3f R_axis(const Vector3f& axis, float angle);
 
 // ================== Coaxial_SPM Class ================== //
 
 class Coaxial_SPM {
 public:
-    double a1, a2, b;
-    std::vector<Vector3d> v, w;
-    Vector3d n;
-    Vector3d u;
-    std::vector<Vector3d> v_origin;
-    Vector3d n_origin;
-    std::vector<double> eta;
-    Matrix3d J;
-    double actuator_origin, actuator_direction;
+    float a1, a2, b;
+    std::vector<Vector3f> v, w;
+    Vector3f n;
+    Vector3f u;
+    std::vector<Vector3f> v_origin;
+    Vector3f n_origin;
+    std::vector<float> eta;
+    Matrix3f J;
+    std::vector<float> sin_eta;
+    std::vector<float> cos_eta;
+    float sin_a1, sin_a2, sin_b;
+    float cos_a1, cos_a2, cos_b;
+    float actuator_origin, actuator_direction;
 
     // Constructor
-    Coaxial_SPM(double a1_, double a2_, double b_);
+    Coaxial_SPM(float a1_, float a2_, float b_);
 
     // YPR to rotation matrix
-    Matrix3d R_ypr(const Vector3d& angle);
+    Matrix3f R_ypr(const Vector3f& angle);
 
     // Limb offset
-    double eta_i(int i);
+    float eta_i(int i);
 
     // Intermediate joint vector
-    Vector3d w_i(double in_i, int i);
+    Vector3f w_i(float in_i, int i);
 
     // Platform joint vector at home
-    Vector3d v_i_origin(int i);
+    Vector3f v_i_origin(int i);
 
     // Inverse position kinematics terms
-    double A_i_ipk(const Vector3d& vi, int i);
-    double B_i_ipk(const Vector3d& vi, int i);
-    double C_i_ipk(const Vector3d& vi, int i);
+    float A_i_ipk(const Vector3f& vi, int i);
+    float B_i_ipk(const Vector3f& vi, int i);
+    float C_i_ipk(const Vector3f& vi, int i);
 
     // Inverse position kinematics
-    Vector3d solve_ipk(const Matrix3d& r);
+    Vector3f solve_ipk(const Matrix3f& r);
 
     // Verify constraints
     void verify_position();
 
     // Inverse velocity kinematics
-    Vector3d solve_ivk(const Matrix3d& platform_angle, const Vector3d& platform_velocity);
+    Vector3f solve_ivk(const Matrix3f& platform_angle, const Vector3f& platform_velocity);
 
     // YPR velocity to angular velocity
-    Vector3d ypr_to_xyz_velocity(const Vector3d& ypr_velocity, const Vector3d& ypr_point);
+    Vector3f ypr_to_xyz_velocity(const Vector3f& ypr_velocity, const Vector3f& ypr_point);
 
 private:
-    bool isclose(double a, double b, double tol=1e-6);
+    bool isclose(float a, float b, float tol=1e-4);
 };

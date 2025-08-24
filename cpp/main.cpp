@@ -4,6 +4,9 @@
 using namespace std;
 using namespace Eigen;
 
+#define PI 3.1415926535897932384
+
+
 // g++ main.cpp CoaxialSPM.cpp -I libs/eigen-3.4.0
 
 int main() {
@@ -16,18 +19,18 @@ int main() {
     Coaxial_SPM spm(a1, a2, b);
 
     // Define a platform orientation (yaw, pitch, roll)
-    Vector3d ypr(3, -0.1, 0.1); // radians
-    Matrix3d R = spm.R_ypr(ypr);
+    Vector3f ypr(3, -0.1, 0.1); // radians
+    Matrix3f R = spm.R_ypr(ypr);
     
     // Define a platform angular velocity in body frame
-    Vector3d ypr_platform_velocity(0, 0.1, 0.5); // rad/s
-    Vector3d xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_platform_velocity, ypr);
+    Vector3f ypr_platform_velocity(0, 0.1, 0.5); // rad/s
+    Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_platform_velocity, ypr);
 
     cout << "xyz_velocity\n" << xyz_platform_velocity << endl;
     cout << "R matrix\n" << R << endl;
     try {
         // Solve inverse velocity kinematics
-        Vector3d input_velocity = spm.solve_ivk(R, xyz_platform_velocity);
+        Vector3f input_velocity = spm.solve_ivk(R, xyz_platform_velocity);
 
         cout << "Platform angular velocity: " << ypr_platform_velocity << endl;
         cout << "Joint input velocities:    " << input_velocity << endl;

@@ -40,8 +40,8 @@ public:
     Vector3f n_origin;
     std::vector<float> eta;
     Matrix3f J;
-    std::vector<float> sin_e;
-    std::vector<float> cos_e;
+    std::vector<float> sin_eta;
+    std::vector<float> cos_eta;
     float sin_a1, sin_a2, sin_b;
     float cos_a1, cos_a2, cos_b;
     float actuator_origin, actuator_direction;
