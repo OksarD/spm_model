@@ -42,9 +42,6 @@ int y_input;
 int dr_input;
 int dp_input;
 int dy_input;
-long test_start_time;
-bool test_running = false;
-int test_duration = 5000;
 
 void initializeMotors() {
   // You could configure the motor drivers here, set microstepping, etc.
@@ -178,27 +175,7 @@ void loop() {
       stepper_2.setSpeed(m2_speed);
       stepper_3.setSpeed(m3_speed);
     }
-    if ((command[0] == 'T' || command[0] == 't') && !test_running) {
-        Serial.println("Testing continous velocity control...");
-        test_start_time = millis();
-        test_running = true;
-    }
   }
-  if(test_running) {
-    int t = millis() - test_start_time;
-    // generate wave
-    float actuator_speed = 2*sin(t*0.001);
-    stepper_1.setSpeed(actuator_to_motor_speed(actuator_speed));
-    stepper_2.setSpeed(actuator_to_motor_speed(actuator_speed));
-    stepper_3.setSpeed(actuator_to_motor_speed(actuator_speed));
-    if (t > test_start_time + test_duration) { // execute at end of test
-      Serial.println("Test finished");
-      stepper_1.setSpeed(0);
-      stepper_2.setSpeed(0);
-      stepper_3.setSpeed(0);
-      test_running = false;
-    }
-  } 
   stepper_1.runSpeed(); // Polling for stepper motors
   stepper_2.runSpeed();
   stepper_3.runSpeed();
