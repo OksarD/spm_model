@@ -3,6 +3,8 @@
 #include <AccelStepper.h>
 #include "CoaxialSPM.hpp"
 
+//#define DEBUG
+
 #define DIR_1 2 
 #define STEP_1 3 //PWM
 #define SLEEP_1 4
@@ -46,7 +48,6 @@ int test_duration = 5000;
 
 void initializeMotors() {
   // You could configure the motor drivers here, set microstepping, etc.
-
     stepper_1.setMaxSpeed(MAX_SPEED);
     stepper_2.setMaxSpeed(MAX_SPEED);
     stepper_3.setMaxSpeed(MAX_SPEED);
@@ -62,7 +63,6 @@ float ExtractValue(const char* linea, char eje) {
   if (index == NULL) {
     return 0;  
   }
-  Serial.println(atof(index + 1));
   return atof(index + 1);
 }
 
@@ -91,18 +91,27 @@ void enable_motors(){
 }
 
 long input_angles(const char* command){
-  Serial.println("R input: ");
   r_input = ExtractValue(command, 'R');
-  Serial.println("P input: ");
   p_input = ExtractValue(command, 'P');
-  Serial.println("Y input: ");
   y_input = ExtractValue(command, 'Y');
-  Serial.println("dR input: ");
   dr_input = ExtractValue(command, 'r');
-  Serial.println("dP input: ");
   dp_input = ExtractValue(command, 'p');
-  Serial.println("dY input: ");
   dy_input = ExtractValue(command, 'y');
+}
+
+void print_input_angles() {
+  Serial.print("R input: ");
+  Serial.println(r_input);
+  Serial.print("P input: ");
+  Serial.println(r_input);
+  Serial.print("Y input: ");
+  Serial.println(r_input);
+  Serial.print("dR input: ");
+  Serial.println(r_input);
+  Serial.print("dP input: ");
+  Serial.println(r_input);
+  Serial.print("dY input: ");
+  Serial.println(r_input);
 }
 
 void show_command(){
@@ -131,8 +140,9 @@ void loop() {
     char command[100]; // Assuming a maximum command length of 700 characters
     clearCharArray(command,sizeof(command));
     Serial.readBytesUntil('\n', command, sizeof(command));
+    #ifdef DEBUG
     Serial.println(command);
-
+    #endif
     if (command[0] == 'E' || command[0] == 'e'){
       enable_motors();
     }
@@ -140,21 +150,25 @@ void loop() {
       disable_motors();
     }
     if (command[0] == 'G' || command[0] == 'g'){
-      current_motor_positions();
+      print_current_position();
     }
     if (command[0] == 'M' || command[0] == 'm') {
       input_angles(command); //get trajectory input in milliradians(/s)
+      #ifdef DEBUG
+      print_input_angles();
+      #endif
       // compute open-loop actuator velocity from reference trajectory
       Vector3f ypr(y_input*0.001, p_input*0.001, r_input*0.001); // ypr reference in radians
       Matrix3f R_mat = spm.R_ypr(ypr);
       Vector3f ypr_platform_velocity(dy_input*0.001, dp_input*0.001, dr_input*0.001); // ypr velocity reference in rad/s
       Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_platform_velocity, ypr);
       Vector3f input_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
-
-      Serial.print("Actuator Velocity");
+      #ifdef DEBUG
+      Serial.println("Actuator Velocity");
       Serial.println(input_velocity[0]);
       Serial.println(input_velocity[1]);
       Serial.println(input_velocity[2]);
+      #endif
       // convert actuator velocity (rad/s) to stepper velocity (steps/s)
       float m1_speed = actuator_to_motor_speed(input_velocity[0]);
       float m2_speed = actuator_to_motor_speed(input_velocity[1]);
@@ -191,13 +205,7 @@ void loop() {
   yield();
 }
 
-void current_motor_positions(){
-  // Serial.print("stepper_1_pos: ");
-  // Serial.println(stepper_1_pos);
-  // Serial.print("stepper_2_pos: ");
-  // Serial.println(stepper_2_pos);
-  // Serial.print("stepper_3_pos: ");
-  // Serial.println(stepper_3_pos);
+void print_current_position(){
   Serial.print("Current Roll: ");
   Serial.println(roll_angle);
   Serial.print("Current Pitch: ");
