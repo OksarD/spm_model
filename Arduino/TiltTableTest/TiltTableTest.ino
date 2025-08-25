@@ -2,8 +2,15 @@
 #include <math.h>
 #include <AccelStepper.h>
 #include "CoaxialSPM.hpp"
+#include <queue>
+#include <vector>
+//--- Adjust Debugging levels Here (#define TRACE/DEBUG/INFO/WARNING)
 
-//#define DEBUG
+//#define INFO
+
+#ifdef DEBUG
+  #define INFO
+#endif
 
 #define DIR_1 2 
 #define STEP_1 3 //PWM
@@ -20,6 +27,13 @@
 #define ROT_SCALE 3.08333
 #define RAD_TO_DEG 57.29577951308232  // Constant to convert radians to degrees
 
+#define COMMAND_BUFFER_SIZE 1024 // approx 16 commands at roughly 32 bytes per command
+#define COMMAND_MAX_SIZE 128 // usually around 32 bytes
+#define XON 0x11 // keep as string so it can be seen
+#define XOFF 0x13
+#define LOOP_TIMING_INTERVAL 50 // milliseconds
+#define DELIM '\n'
+
 // Coaxial SPM object
 float a1 = PI / 4;   // 45 deg
 float a2 = PI / 2;   // 90 deg
@@ -30,9 +44,6 @@ AccelStepper stepper_1(AccelStepper::DRIVER, STEP_1, DIR_1);
 AccelStepper stepper_2(AccelStepper::DRIVER, STEP_2, DIR_2);
 AccelStepper stepper_3(AccelStepper::DRIVER, STEP_3, DIR_3);
 
-long stepper_1_pos = 0;
-long stepper_2_pos = 0;
-long stepper_3_pos = 0;
 long roll_angle = 0;
 long pitch_angle = 0;
 long yaw_angle = 0;
@@ -43,6 +54,13 @@ int dr_input;
 int dp_input;
 int dy_input;
 
+std::queue<char> command_buffer;
+bool flow_control_halt = false;
+bool loop_timing_enabled = false;
+unsigned long loop_start_time;
+unsigned long loop_time_elapsed;
+unsigned long loop_time_proc;
+
 void initializeMotors() {
   // You could configure the motor drivers here, set microstepping, etc.
     stepper_1.setMaxSpeed(MAX_SPEED);
@@ -51,7 +69,6 @@ void initializeMotors() {
     pinMode(SLEEP_1, OUTPUT);
     pinMode(SLEEP_2, OUTPUT);
     pinMode(SLEEP_3, OUTPUT);
-
     Serial.println("Stepper Motors initialization succeeded!");
 }
 
@@ -70,21 +87,21 @@ void clearCharArray(char* charArray, size_t size) {
 }
 
 void disable_motors(){
-  Serial.println("Disabling Motors...");
   digitalWrite(SLEEP_1, LOW);
   digitalWrite(SLEEP_2, LOW);
   digitalWrite(SLEEP_3, LOW);
-  delay(1000);
+  #ifdef DEBUG
   Serial.println("Motors Disabled!");
+  #endif
 }
 
 void enable_motors(){
-  Serial.println("Enabling Motors...");
   digitalWrite(SLEEP_1, HIGH);
   digitalWrite(SLEEP_2, HIGH);
   digitalWrite(SLEEP_3, HIGH);
-  delay(1000);
+  #ifdef DEBUG
   Serial.println("Motors Enabled!");
+  #endif
 }
 
 long input_angles(const char* command){
@@ -131,52 +148,145 @@ void setup() {
   Serial.println("\nPlease enter a command: ");
 }
 
-void loop() {
-  // float angle = 0.00;
-  if(Serial.available()) {
-    char command[100]; // Assuming a maximum command length of 700 characters
-    clearCharArray(command,sizeof(command));
-    Serial.readBytesUntil('\n', command, sizeof(command));
-    #ifdef DEBUG
-    Serial.println(command);
-    #endif
-    if (command[0] == 'E' || command[0] == 'e'){
-      enable_motors();
-    }
-    if (command[0] == 'D' || command[0] == 'd'){
-      disable_motors();
-    }
-    if (command[0] == 'G' || command[0] == 'g'){
-      print_current_position();
-    }
-    if (command[0] == 'M' || command[0] == 'm') {
-      input_angles(command); //get trajectory input in milliradians(/s)
-      #ifdef DEBUG
-      print_input_angles();
-      #endif
-      // compute open-loop actuator velocity from reference trajectory
-      Vector3f ypr(y_input*0.001, p_input*0.001, r_input*0.001); // ypr reference in radians
-      Matrix3f R_mat = spm.R_ypr(ypr);
-      Vector3f ypr_platform_velocity(dy_input*0.001, dp_input*0.001, dr_input*0.001); // ypr velocity reference in rad/s
-      Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_platform_velocity, ypr);
-      Vector3f input_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
-      #ifdef DEBUG
-      Serial.println("Actuator Velocity");
-      Serial.println(input_velocity[0]);
-      Serial.println(input_velocity[1]);
-      Serial.println(input_velocity[2]);
-      #endif
-      // convert actuator velocity (rad/s) to stepper velocity (steps/s)
-      float m1_speed = actuator_to_motor_speed(input_velocity[0]);
-      float m2_speed = actuator_to_motor_speed(input_velocity[1]);
-      float m3_speed = actuator_to_motor_speed(input_velocity[2]);
+void buffer_push(unsigned int length, char* items) {
+  for (unsigned int i=0; i<length; i++) {
+    command_buffer.push(items[i]);
+  }
+  command_buffer.push(DELIM); //add back the delimiter
+}
 
-      stepper_1.setSpeed(m1_speed);
-      stepper_2.setSpeed(m2_speed);
-      stepper_3.setSpeed(m3_speed);
+char* buffer_pop() {
+  static char command[COMMAND_MAX_SIZE];
+  byte index = 0;
+  clearCharArray(command,sizeof(command));
+  // pop until the start character is reached
+  while (!command_buffer.empty() && command_buffer.front() != DELIM) {
+      command[index] = command_buffer.front();
+      command_buffer.pop();
+      index++;
+  }
+  if (!command_buffer.empty()) {
+    command[index] = command_buffer.front();
+    command_buffer.pop(); // pop the delimiter character as well
+  }
+  return command;
+}
+
+bool loop_timing() {
+  if (!loop_timing_enabled) {
+    return true; // always allow loop function when loop timing is disabled
+  } else {
+    loop_time_elapsed = millis() - loop_start_time; // elapsed time since session start
+    if (loop_time_elapsed - loop_time_proc > LOOP_TIMING_INTERVAL) {
+      loop_time_proc += LOOP_TIMING_INTERVAL;
+      #ifdef DEBUG
+      Serial.println("Loop timing proc");
+      #endif
+      return true; // enable buffer read when loop timing has started
+    } else {
+      return false; // prevent buffer read
     }
   }
-  stepper_1.runSpeed(); // Polling for stepper motors
+}
+
+void loop() {
+  // Read serial data and place into buffer
+  if(Serial.available()) {
+    char command[COMMAND_MAX_SIZE];
+    clearCharArray(command,sizeof(command));
+    int command_length = Serial.readBytesUntil(DELIM, command, sizeof(command));
+    buffer_push(command_length, command);
+  }
+  
+  // flow control
+  if (command_buffer.size() >= COMMAND_BUFFER_SIZE && flow_control_halt == false) {
+    Serial.print(XOFF);
+    flow_control_halt = true;
+    #ifdef INFO
+    Serial.println("XOFF sent");
+    #endif
+  } else if (command_buffer.size() < COMMAND_BUFFER_SIZE && flow_control_halt == true) {
+    Serial.print(XON);
+    flow_control_halt = false;
+    #ifdef INFO
+    Serial.println("XON sent");
+    #endif
+  }
+  
+  // Read commands from buffer, always if loop timing has not started, and only when the timer procs if it is allowed.
+  if (!command_buffer.empty() && loop_timing()) {
+    #ifdef INFO
+    Serial.print("Buffer length ");
+    Serial.println(command_buffer.size());
+    #endif
+    char* command = buffer_pop();
+    #ifdef DEBUG
+    Serial.print("Popped Command ");
+    Serial.println(command);
+    #endif
+    switch(command[0]) {
+      case 'M': {
+        // Movement command
+        input_angles(command); //get trajectory input in milliradians(/s)
+        #ifdef DEBUG
+        print_input_angles();
+        #endif
+        // compute open-loop actuator velocity from reference trajectory
+        Vector3f ypr(y_input*0.001, p_input*0.001, r_input*0.001); // ypr reference in radians
+        Matrix3f R_mat = spm.R_ypr(ypr);
+        Vector3f ypr_platform_velocity(dy_input*0.001, dp_input*0.001, dr_input*0.001); // ypr velocity reference in rad/s
+        Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_platform_velocity, ypr);
+        Vector3f input_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
+        #ifdef DEBUG
+        Serial.println("Actuator Velocity");
+        Serial.println(input_velocity[0]);
+        Serial.println(input_velocity[1]);
+        Serial.println(input_velocity[2]);
+        #endif
+        // convert actuator velocity (rad/s) to stepper velocity (steps/s) and set the motor speed
+        stepper_1.setSpeed(actuator_to_motor_speed(input_velocity[0]));
+        stepper_2.setSpeed(actuator_to_motor_speed(input_velocity[1]));
+        stepper_3.setSpeed(actuator_to_motor_speed(input_velocity[2]));
+        break;
+      }
+      case 'E': {
+        enable_motors();
+        break;
+      }
+      case 'D': {
+        disable_motors();
+        break;
+      }
+      case 'G': {
+        print_current_position();
+        break;
+      }
+      case 'S': {
+        loop_timing_enabled = true;
+        loop_start_time = millis();
+        loop_time_proc = 0;
+        #ifdef DEBUG
+        Serial.println("Loop timing enabled");
+        #endif
+        break;
+      }
+      case 'X': {
+        loop_timing_enabled = false;
+        #ifdef DEBUG
+        Serial.println("Loop timing disabled");
+        #endif
+        break;
+      }
+      default: {
+        #ifdef DEBUG
+        Serial.print("Unknown Command ");
+        Serial.println(command);
+        #endif
+      }
+    }
+  }
+  // Polling for stepper motors
+  stepper_1.runSpeed(); 
   stepper_2.runSpeed();
   stepper_3.runSpeed();
   yield();
