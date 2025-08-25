@@ -1,15 +1,19 @@
 import time
 import serial
 from numpy import pi, sin, cos
+from generator import pathGenerator
 
+SAMPLE_FREQUENCY = 50 # Hz
+FILTER_FREQUENCY = 10 # Hz
 
-path = ['1', '2', '3', '4', '5', '6', '7', 'A', 'B', 'C']
-
+flow_control_paused = False
 ser = serial.Serial(
     port='COM6',
     baudrate=115200,
     xonxoff = True
 )
+
+generator = pathGenerator(SAMPLE_FREQUENCY, FILTER_FREQUENCY)
 
 def generate_movement_command(y,p,r,dy,dp,dr):
     # convert to milliradians(/s)
@@ -22,7 +26,7 @@ def generate_movement_command(y,p,r,dy,dp,dr):
     return "MY{}P{}R{}y{}p{}r{}\n".format(m_y,m_p,m_r,m_dy,m_dp,m_dr)
 
 def send_command(command):
-    ser.write(command.encode('ascii'))  ## Encode the string as ASCII and write it to the serial port
+    ser.write(command.encode("ascii"))
 
 def start_command():
     send_command("S\n")
@@ -39,35 +43,6 @@ def read_printout():
         line = ser.readline()
         print(str(line))
 
-def test_serial():
-    print("Testing trajecotry generation")
-    test_duration = 10 #seconds
-    start_time = time.time()
-    #start_command()
-    while time.time() < start_time + test_duration:
-        read_printout()
-        read_printout()
-        read_printout()
-        read_printout()
-        read_printout()
-        t = time.time()
-        dy = 2*sin(t)
-        dy = 2*cos(t) # derivative of y
-
-        p = 0.5*sin(t)
-        dp = 0.5*cos(t) # derivative of p
-
-        r = 0.5*cos(t)
-        dr = 0.5*-sin(t) # derivative of r
-
-        command = generate_movement_command(0,p,r,0,dp,dr)
-        #print(command, end="")
-        send_command(command)
-        time.sleep(0.250)
-    halt_command()
-    #stop_command()
-    print("finished test")
-
 def main():
     print("Trajectory Generator for Coaxial Mainipulator")
     halt_command()
@@ -75,7 +50,8 @@ def main():
     while(True):
         line = input("->")
         if line == "T" or line == "t":
-            test_serial()
+            trajectory = generator.generate_triangle_trajectory(1,2,10)
+            trajectory.plot()
         if line.startswith("-"): # use dash character '-' to bypass commands directly to the microcontroller
             command = line[1:]
             print(command)
