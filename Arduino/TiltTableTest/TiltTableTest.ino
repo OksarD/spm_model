@@ -31,7 +31,7 @@
 #define COMMAND_MAX_SIZE 128 // usually around 32 bytes
 #define XON 0x11 // keep as string so it can be seen
 #define XOFF 0x13
-#define LOOP_TIMING_INTERVAL 500 // milliseconds
+#define LOOP_TIMING_INTERVAL 50 // milliseconds
 #define DELIM '\n'
 
 // Coaxial SPM object
