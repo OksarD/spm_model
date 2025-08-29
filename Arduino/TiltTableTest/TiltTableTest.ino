@@ -2,6 +2,7 @@
 #include <math.h>
 #include <AccelStepper.h>
 #include "CoaxialSPM.hpp"
+#include <queue>
 #include <vector>
 //--- Adjust Debugging levels Here (#define TRACE/DEBUG/INFO/WARNING)
 
@@ -26,8 +27,7 @@
 #define ROT_SCALE 3.08333
 #define RAD_TO_DEG 57.29577951308232  // Constant to convert radians to degrees
 
-#define BUFFER_FULL_SIZE 150
-#define BUFFER_EMPTY_SIZE 50
+#define COMMAND_BUFFER_SIZE 1024 // approx 16 commands at roughly 32 bytes per command
 #define COMMAND_MAX_SIZE 128 // usually around 32 bytes
 #define XON 0x11 // keep as string so it can be seen
 #define XOFF 0x13
@@ -54,6 +54,7 @@ int dr_input;
 int dp_input;
 int dy_input;
 
+std::queue<char> command_buffer;
 bool flow_control_halt = false;
 bool loop_timing_enabled = false;
 unsigned long loop_start_time;
@@ -147,6 +148,30 @@ void setup() {
   Serial.println("\nPlease enter a command: ");
 }
 
+void buffer_push(unsigned int length, char* items) {
+  for (unsigned int i=0; i<length; i++) {
+    command_buffer.push(items[i]);
+  }
+  command_buffer.push(DELIM); //add back the delimiter
+}
+
+char* buffer_pop() {
+  static char command[COMMAND_MAX_SIZE];
+  byte index = 0;
+  clearCharArray(command,sizeof(command));
+  // pop until the start character is reached
+  while (!command_buffer.empty() && command_buffer.front() != DELIM) {
+      command[index] = command_buffer.front();
+      command_buffer.pop();
+      index++;
+  }
+  if (!command_buffer.empty()) {
+    command[index] = command_buffer.front();
+    command_buffer.pop(); // pop the delimiter character as well
+  }
+  return command;
+}
+
 bool loop_timing() {
   if (!loop_timing_enabled) {
     return true; // always allow loop function when loop timing is disabled
@@ -165,31 +190,40 @@ bool loop_timing() {
 }
 
 void loop() {
+  // Read serial data and place into buffer
+  if(Serial.available()) {
+    char command[COMMAND_MAX_SIZE];
+    clearCharArray(command,sizeof(command));
+    int command_length = Serial.readBytesUntil(DELIM, command, sizeof(command));
+    buffer_push(command_length, command);
+  }
+  
   // flow control
-  if (Serial.available() >= BUFFER_FULL_SIZE && flow_control_halt == false) {
-    Serial.write(XOFF);
+  if (command_buffer.size() >= COMMAND_BUFFER_SIZE && flow_control_halt == false) {
+    Serial.print(XOFF);
     flow_control_halt = true;
     #ifdef INFO
     Serial.println("XOFF sent");
     #endif
-  } else if (Serial.available() < BUFFER_EMPTY_SIZE && flow_control_halt == true) {
-    Serial.write(XON);
+  } else if (command_buffer.size() < COMMAND_BUFFER_SIZE && flow_control_halt == true) {
+    Serial.print(XON);
     flow_control_halt = false;
     #ifdef INFO
-    Serial.print("XON sent");
+    Serial.println("XON sent");
     #endif
   }
-
-  // Read serial data and place into buffer
-  if(Serial.available() && loop_timing()) {
+  
+  // Read commands from buffer, always if loop timing has not started, and only when the timer procs if it is allowed.
+  if (!command_buffer.empty() && loop_timing()) {
     #ifdef INFO
-    Serial.print("Buffer level ");
-    Serial.println(Serial.available());
+    Serial.print("Buffer length ");
+    Serial.println(command_buffer.size());
     #endif
-    char command[COMMAND_MAX_SIZE];
-    clearCharArray(command,sizeof(command));
-    int command_length = Serial.readBytesUntil(DELIM, command, sizeof(command));
-    // Read commands from buffer, always if loop timing has not started, and only when the timer procs if it is allowed.
+    char* command = buffer_pop();
+    #ifdef DEBUG
+    Serial.print("Popped Command ");
+    Serial.println(command);
+    #endif
     switch(command[0]) {
       case 'M': {
         // Movement command
@@ -251,7 +285,6 @@ void loop() {
       }
     }
   }
-
   // Polling for stepper motors
   stepper_1.runSpeed(); 
   stepper_2.runSpeed();
