@@ -1,15 +1,15 @@
 import time
 import serial
-from numpy import pi, sin, cos
+from numpy import pi, sin, cos, radians, degrees
 from generator import pathGenerator, trajectory, loopTimer
 import threading
 
 SAMPLE_FREQUENCY = 20 # Hz
 FILTER_FREQUENCY = 10 # Hz
-SERIAL_SPEEDUP = 1.5 # send serial faster than the sample frequency to ensure buffer filling
+SERIAL_SPEEDUP = 2 # send serial faster than the sample frequency to ensure buffer filling
 
-XON = '\x11'
-XOFF = '\x13'
+XON = b'\x11'
+XOFF = b'\x13'
 
 flow_control_paused = False
 loop_timing_enabled = False
@@ -47,6 +47,7 @@ def halt_command():
     send_command(command)
 
 def session_timer_callback(traj_y: trajectory, traj_p: trajectory, traj_r: trajectory):
+    global session_running, session_loop_timer
     try:
         (y, dy, _) = next(traj_y)
         (p, dp, _) = next(traj_p)
@@ -59,22 +60,24 @@ def session_timer_callback(traj_y: trajectory, traj_p: trajectory, traj_r: traje
         halt_command()
 
 def read_with_flow_control(serial_object):
-    data_buf = []
     data = serial_object.read_all()
     if data == None:
         return None
-    else:
-        for b in data:
-            if b == XOFF:
-                session_loop_timer.pause()
-                print("flow paused")
-            if b == XON:
-                session_loop_timer.resume()
-                print("flow resumed")
-            else:
-                data_buf.append(b)
-        return bytes(data_buf).decode('ascii')
-
+    
+    data_buf = []
+    for b in data:
+        if b == XOFF[0]:
+            session_loop_timer.pause()
+            print("flow paused")
+        elif b == XON[0]:
+            session_loop_timer.resume()
+            print("flow resumed")
+        else:
+            data_buf.append(b)
+    
+    if data_buf:
+        return bytes(data_buf).decode(errors="ignore")
+    return None
 
 def main():
     global session_running
@@ -83,20 +86,21 @@ def main():
     halt_command()
     # main loop
     while(True):
-        # Application level flow-control
         incoming_data = read_with_flow_control(ser)
-        print(incoming_data)
+        if incoming_data != None:
+            print(incoming_data)
         # Client Commands
         if not session_running:
             line = input("->")
         if line == "T" or line == "t":
+            line = None
             if (session_running == True):
                 print("Cannot start a new session when one is alrady running!")
             else:
                 session_running = True
                 test_duration = 20
                 traj_y = generator.generate_zero_trajectory(test_duration)
-                traj_p = generator.generate_sin_trajectory(0.75,4,test_duration)
+                traj_p = generator.generate_sin_trajectory(radians(40),4,test_duration)
                 traj_r = generator.generate_zero_trajectory(test_duration)
                 session_loop_timer = loopTimer(1/(SAMPLE_FREQUENCY*SERIAL_SPEEDUP), session_timer_callback, (traj_y, traj_p, traj_r))
                 session_loop_timer.start()
@@ -108,10 +112,13 @@ def main():
                     traj_p.plot()
                 if not traj_r.is_zero:
                     traj_r.plot()
+        
+        time.sleep(0.01)
 
-        if line.startswith("-"): # use dash character '-' to bypass commands directly to the microcontroller
-            command = line[1:]
-            print(command)
-            send_command(command)
+        if line != None:
+            if line.startswith("-"): # use dash character '-' to bypass commands directly to the microcontroller
+                command = line[1:]
+                print(command)
+                send_command(command)
 
 main()

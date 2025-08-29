@@ -37,7 +37,8 @@ class trajectory():
         plt.plot(self._t, self._func, label="func")
         plt.plot(self._t, self._deriv, label="deriv")
         plt.legend(); plt.grid()
-        plt.show()
+        plt.show(block=False)
+        plt.pause(0.001)
 
 class pathGenerator():
     def __init__(self, sample_freq, filter_freq):
@@ -110,7 +111,9 @@ class loopTimer():
         next_call = time.perf_counter()
         while not stop_event.is_set():
             while self._pause_event.is_set():
-                pass
+                if stop_event.is_set():
+                    return
+                time.sleep(0.001)
             # execute callback
             callback(*args, **kwargs)
             # Schedule next iteration
@@ -121,3 +124,4 @@ class loopTimer():
             else:
                 # If we're behind schedule, skip sleeping
                 next_call = time.perf_counter()
+        #print("loop Timer finished")
