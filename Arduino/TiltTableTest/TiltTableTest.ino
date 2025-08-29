@@ -27,7 +27,8 @@
 #define ROT_SCALE 3.08333
 #define RAD_TO_DEG 57.29577951308232  // Constant to convert radians to degrees
 
-#define COMMAND_BUFFER_SIZE 1024 // approx 16 commands at roughly 32 bytes per command
+#define COMMAND_BUFFER_FULL_SIZE 512 // approx 16 commands at roughly 32 bytes per command
+#define COMMAND_BUFFER_EMPTY_SIZE 256 // approx 16 commands at roughly 32 bytes per command
 #define COMMAND_MAX_SIZE 128 // usually around 32 bytes
 #define XON 0x11 // keep as string so it can be seen
 #define XOFF 0x13
@@ -199,14 +200,14 @@ void loop() {
   }
   
   // flow control
-  if (command_buffer.size() >= COMMAND_BUFFER_SIZE && flow_control_halt == false) {
-    Serial.print(XOFF);
+  if (command_buffer.size() >= COMMAND_BUFFER_FULL_SIZE && flow_control_halt == false) {
+    Serial.write(XOFF);
     flow_control_halt = true;
     #ifdef INFO
     Serial.println("XOFF sent");
     #endif
-  } else if (command_buffer.size() < COMMAND_BUFFER_SIZE && flow_control_halt == true) {
-    Serial.print(XON);
+  } else if (command_buffer.size() < COMMAND_BUFFER_EMPTY_SIZE && flow_control_halt == true) {
+    Serial.write(XON);
     flow_control_halt = false;
     #ifdef INFO
     Serial.println("XON sent");
