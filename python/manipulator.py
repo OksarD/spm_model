@@ -72,7 +72,7 @@ class Coaxial_SPM:
         return v_ix*cos(e_i)*sin(self.a1) + v_iy*sin(e_i)*sin(self.a1) - v_iz*cos(self.a1) - cos(self.a2)
     
     # algebraically solves positional inverse kinematic problem
-    def solve_ipk(self, r):
+    def solve_ipk(self, r, exception=True):
         self.v = [r@self.v_origin[i] for i in self.i_range]
         self.n = r@self.n_origin
         A = [self.A_i_ipk(self.v[i], i) for i in self.i_range]
@@ -81,11 +81,13 @@ class Coaxial_SPM:
         T = [solve_quadratic(A[i], B[i]*2, C[i])[0] for i in self.i_range] # we choose the first solution [0] because it lines up with the orientation of our manipulator
         input_angle = np.array([cmath.atan(T[i]).real*2 for i in self.i_range])
         self.w = [self.w_i(input_angle[i], i) for i in self.i_range] # intermediate joint unit vector
-        self.verify_position()
-        return input_angle
+        if self.verify_position(exception) == True:
+            return input_angle
+        else:
+            return [np.nan, np.nan, np.nan]
     
     # use system paramaters to verify if the current state is valid
-    def verify_position(self):
+    def verify_position(self, exception=True):
         invalid_param = None
         for i in self.i_range:
             if isclose(angle_between(self.u, self.w[i]), self.a1) == False:
@@ -95,7 +97,11 @@ class Coaxial_SPM:
             elif isclose(angle_between(self.v[i], self.n), self.b) == False:
                 invalid_param = "b"
             if invalid_param != None:
-                raise BaseException("Rotation invalid! paramater %s is incorrect" % invalid_param)
+                if exception == True:
+                    raise BaseException("Rotation invalid! paramater %s is incorrect" % invalid_param)
+                return False
+            else:
+                return True
     
     # algebraically solves inverse velocity kinematic problem using Jacobian matrix
     def solve_ivk(self, platform_angle, platform_velocity):
@@ -149,7 +155,7 @@ class Coaxial_SPM:
     # numerically solves fpk problem and returns the rotation matrix
     def solve_fpk(self, input_angles, ignore_error=False):
         # decouple yaw by subtracting first angle
-        # also correct actuator inversion and offset
+        # also tirn actuator angle/velocity positive (around the up Z axis instead of the default down)
         yaw_offset = wrap_rad(self.actuator_direction*(input_angles[0] - self.actuator_origin))
         # print("yaw_offset", yaw_offset)
         offset_input_angles = input_angles + yaw_offset

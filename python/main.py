@@ -25,7 +25,7 @@ def main():
     ax = fig.add_subplot(111, projection='3d')
 
     # Desired angle in ypr (rad/s)
-    yaw = 0
+    yaw = 1
     pitch = 0
     roll = 0
     ypr = np.array([wrap_rad(yaw),wrap_rad(pitch),wrap_rad(roll)])
@@ -55,7 +55,7 @@ def main():
     ypr_f = [ypr[i] + w_ypr[i]*dt_epsilon for i in spm.i_range]
     a_i = spm.solve_ipk(spm.R_ypr(ypr))
     a_f = spm.solve_ipk(spm.R_ypr(ypr_f))
-    a_delta = np.array([closest_angular_delta(a_f[i],a_i[i]) for i in spm.i_range])
+    a_delta = np.array([angle_subtract(a_f[i],a_i[i]) for i in spm.i_range])
     actuator_velocity_approx = a_delta/dt_epsilon
     #print("approx actuator velocity", actuator_velocity_approx)
     print("actuator velocity", actuator_velocity)

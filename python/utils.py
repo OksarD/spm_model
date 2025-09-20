@@ -72,7 +72,7 @@ def R_orthonormal(o_v):
     return np.array([o_v[0], o_v[1], o_v[2]]).T
 
 # calculates a2 - a1 and accounts for angular discontiuity by choosing the value closest to zero
-def closest_angular_delta(a_2, a_1):
+def angle_subtract(a_2, a_1):
     opt = [a_2 - a_1 + 2*pi, 
             a_2 - a_1 - 2*pi, 
             a_2 - a_1]
