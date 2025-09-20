@@ -4,7 +4,7 @@ from numpy import pi, sin, cos, radians, degrees
 from generator import pathGenerator, trajectory, loopTimer
 import threading
 
-SAMPLE_FREQUENCY = 20 # Hz
+SAMPLE_FREQUENCY = 50 # Hz
 FILTER_FREQUENCY = 10 # Hz
 SERIAL_SPEEDUP = 2 # send serial faster than the sample frequency to ensure buffer filling
 
@@ -58,6 +58,7 @@ def session_timer_callback(traj_y: trajectory, traj_p: trajectory, traj_r: traje
         session_running = False
         session_loop_timer.stop()
         halt_command()
+        stop_command()
 
 def read_with_flow_control(serial_object):
     data = serial_object.read_all()
@@ -68,10 +69,10 @@ def read_with_flow_control(serial_object):
     for b in data:
         if b == XOFF[0]:
             session_loop_timer.pause()
-            print("flow paused")
+            #print("flow paused")
         elif b == XON[0]:
             session_loop_timer.resume()
-            print("flow resumed")
+            #print("flow resumed")
         else:
             data_buf.append(b)
     
@@ -88,7 +89,7 @@ def main():
     while(True):
         incoming_data = read_with_flow_control(ser)
         if incoming_data != None:
-            print(incoming_data)
+            print(incoming_data, end="")
         # Client Commands
         if not session_running:
             line = input("->")
@@ -100,9 +101,10 @@ def main():
                 session_running = True
                 test_duration = 20
                 traj_y = generator.generate_zero_trajectory(test_duration)
-                traj_p = generator.generate_sin_trajectory(radians(30),4,test_duration)
+                traj_p = generator.generate_triangle_trajectory(radians(30),4,test_duration, filter=True)
                 traj_r = generator.generate_zero_trajectory(test_duration)
                 session_loop_timer = loopTimer(1/(SAMPLE_FREQUENCY*SERIAL_SPEEDUP), session_timer_callback, (traj_y, traj_p, traj_r))
+                start_command()
                 session_loop_timer.start()
                 
                 # Plot

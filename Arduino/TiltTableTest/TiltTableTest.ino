@@ -30,9 +30,9 @@
 #define COMMAND_BUFFER_FULL_SIZE 512 // approx 16 commands at roughly 32 bytes per command
 #define COMMAND_BUFFER_EMPTY_SIZE 256 // approx 16 commands at roughly 32 bytes per command
 #define COMMAND_MAX_SIZE 128 // usually around 32 bytes
-#define XON 0x11 // keep as string so it can be seen
+#define XON 0x11
 #define XOFF 0x13
-#define LOOP_TIMING_INTERVAL 50 // milliseconds
+#define LOOP_TIMING_INTERVAL 20000 // microseconds 
 #define DELIM '\n'
 
 // Coaxial SPM object
@@ -59,7 +59,7 @@ std::queue<char> command_buffer;
 bool flow_control_halt = false;
 bool loop_timing_enabled = false;
 unsigned long loop_start_time;
-unsigned long loop_time_elapsed;
+unsigned long loop_time_elapsed = 0;
 unsigned long loop_time_proc;
 
 void initializeMotors() {
@@ -177,7 +177,7 @@ bool loop_timing() {
   if (!loop_timing_enabled) {
     return true; // always allow loop function when loop timing is disabled
   } else {
-    loop_time_elapsed = millis() - loop_start_time; // elapsed time since session start
+    loop_time_elapsed = micros() - loop_start_time; // elapsed time since session start
     if (loop_time_elapsed - loop_time_proc > LOOP_TIMING_INTERVAL) {
       loop_time_proc += LOOP_TIMING_INTERVAL;
       #ifdef DEBUG
@@ -203,20 +203,20 @@ void loop() {
   if (command_buffer.size() >= COMMAND_BUFFER_FULL_SIZE && flow_control_halt == false) {
     Serial.write(XOFF);
     flow_control_halt = true;
-    #ifdef INFO
+    #ifdef DEBUG
     Serial.println("XOFF sent");
     #endif
   } else if (command_buffer.size() < COMMAND_BUFFER_EMPTY_SIZE && flow_control_halt == true) {
     Serial.write(XON);
     flow_control_halt = false;
-    #ifdef INFO
+    #ifdef DEBUG
     Serial.println("XON sent");
     #endif
   }
   
   // Read commands from buffer, always if loop timing has not started, and only when the timer procs if it is allowed.
   if (!command_buffer.empty() && loop_timing()) {
-    #ifdef INFO
+    #ifdef DEBUG
     Serial.print("Buffer length ");
     Serial.println(command_buffer.size());
     #endif
@@ -237,17 +237,21 @@ void loop() {
         Matrix3f R_mat = spm.R_ypr(ypr);
         Vector3f ypr_platform_velocity(dy_input*0.001, dp_input*0.001, dr_input*0.001); // ypr velocity reference in rad/s
         Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_platform_velocity, ypr);
-        Vector3f input_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
-        #ifdef DEBUG
-        Serial.println("Actuator Velocity");
-        Serial.println(input_velocity[0]);
-        Serial.println(input_velocity[1]);
-        Serial.println(input_velocity[2]);
+        Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
+        #ifdef INFO
+        Serial.print(loop_time_elapsed);
+        Serial.print(",");
+        Serial.print(actuator_velocity[0], 4);
+        Serial.print(",");
+        Serial.print(actuator_velocity[1], 4);
+        Serial.print(",");
+        Serial.print(actuator_velocity[2], 4);
+        Serial.println();
         #endif
         // convert actuator velocity (rad/s) to stepper velocity (steps/s) and set the motor speed
-        stepper_1.setSpeed(actuator_to_motor_speed(input_velocity[0]));
-        stepper_2.setSpeed(actuator_to_motor_speed(input_velocity[1]));
-        stepper_3.setSpeed(actuator_to_motor_speed(input_velocity[2]));
+        stepper_1.setSpeed(actuator_to_motor_speed(actuator_velocity[0]));
+        stepper_2.setSpeed(actuator_to_motor_speed(actuator_velocity[1]));
+        stepper_3.setSpeed(actuator_to_motor_speed(actuator_velocity[2]));
         break;
       }
       case 'E': {
@@ -264,7 +268,7 @@ void loop() {
       }
       case 'S': {
         loop_timing_enabled = true;
-        loop_start_time = millis();
+        loop_start_time = micros();
         loop_time_proc = 0;
         #ifdef DEBUG
         Serial.println("Loop timing enabled");

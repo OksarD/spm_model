@@ -7,10 +7,10 @@ Python client commands:
     T/t run the test script. This script can generate a sine, cosine or triangular trajectory using the functions in generator.py
 
 Arduino Commands:
-    MY#P#R#y#p#r# Move the robot in a specivied velocity, dicated by y#p#r# (in integer milliradians/s),
+    MY#P#R#y#p#r# Move the robot in a specified velocity, dicated by y#p#r# (in integer milliradians/s),
     assuming an operating point dicated by Y#P#R# (in integer milliradians)
 
-    E/D Enable/Disable Motors motors
+    E/D Enable/Disable motors
 
     S/X Start or Exit the session. A session will use loop timing on the microcontroller level to ensure accurate motor command execution
 
