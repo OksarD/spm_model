@@ -4,6 +4,8 @@ import cmath
 from utils import *
 from scipy import optimize
 import scipy.spatial.transform as transform
+import warnings
+warnings.filterwarnings("error")
 
 class Coaxial_SPM:
     def __init__(self, a1, a2, b): # gamma assumed to be zero for coaxial spm
@@ -98,17 +100,17 @@ class Coaxial_SPM:
     # algebraically solves inverse velocity kinematic problem using Jacobian matrix
     def solve_ivk(self, platform_angle, platform_velocity):
         self.solve_ipk(platform_angle) # solve for w and v unit vectors at operting point
-        print("v\n", self.v)
-        print("w\n", self.w)
+        # print("v\n", self.v)
+        # print("w\n", self.w)
         A = np.array([np.cross(self.w[i], self.v[i]).T for i in self.i_range])
-        print("A")
-        print(A)
+        # print("A")
+        # print(A)
         B = np.diag([np.dot(np.cross(self.u, self.w[i]), self.v[i]) for i in self.i_range])
-        print("B:")
-        print(B)
+        # print("B:")
+        # print(B)
         self.J = np.linalg.inv(B)@A  
-        print("J:")
-        print(self.J)
+        # print("J:")
+        # print(self.J)
         input_velocity = self.J@platform_velocity.T
         return input_velocity
 
@@ -145,20 +147,28 @@ class Coaxial_SPM:
         return r
 
     # numerically solves fpk problem and returns the rotation matrix
-    def solve_fpk(self, input_angles):
+    def solve_fpk(self, input_angles, ignore_error=False):
         # decouple yaw by subtracting first angle
+        # also correct actuator inversion and offset
         yaw_offset = wrap_rad(self.actuator_direction*(input_angles[0] - self.actuator_origin))
-        print("yaw_offset", yaw_offset)
+        # print("yaw_offset", yaw_offset)
         offset_input_angles = input_angles + yaw_offset
         init_v = [1,1,1,-1,-1,1,1,-1,1] # initial vector guess which corresponds to l-l-l configuration
         # nonlinear canonical system of equations
         self.w_fpk = np.array([self.w_i(offset_input_angles[i], i) for i in self.i_range])
-        v_out = optimize.fsolve(func=self.fpk_system, x0=init_v)
-        self.v_fpk = np.array([v_out[i*3:i*3+3] for i in self.i_range])
-        self.v_fpk = [R_z(yaw_offset) @ self.v_fpk[i] for i in self.i_range]
-        # print("v_fpk")
-        # print(self.v_fpk)
-        ypr = self.unwind_ypr(self.v_fpk)
+        try:
+            v_out = optimize.fsolve(func=self.fpk_system, x0=init_v)
+            self.v_fpk = np.array([v_out[i*3:i*3+3] for i in self.i_range])
+            self.v_fpk = [R_z(yaw_offset) @ self.v_fpk[i] for i in self.i_range]
+            # print("v_fpk")
+            # print(self.v_fpk)
+            ypr = self.unwind_ypr(self.v_fpk)
+        except RuntimeWarning as warn:
+            if ignore_error == True:
+                ypr_invalid = [np.nan, np.nan, np.nan]
+                return ypr_invalid
+            else:
+                raise(warn)
         return ypr
     
     # unwinds ypr angles from three-vector (v) platform representation. Angular range is -180 <= a < 180
