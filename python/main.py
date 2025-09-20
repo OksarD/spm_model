@@ -25,16 +25,16 @@ def main():
     ax = fig.add_subplot(111, projection='3d')
 
     # Desired angle in ypr (rad/s)
-    yaw = 3
-    pitch = -0.1
-    roll = 0.1
+    yaw = 0
+    pitch = 0
+    roll = 0
     ypr = np.array([wrap_rad(yaw),wrap_rad(pitch),wrap_rad(roll)])
     R_ypr = spm.R_ypr(ypr)
     print("R_ypr ", R_ypr)
     # Desired angular velocity in ypr (rad/s)
-    w_yaw = 0
-    w_pitch = 0.1
-    w_roll = 0.5
+    w_yaw = 1
+    w_pitch = 0
+    w_roll = 0
     w_ypr = np.array([w_yaw, w_pitch, w_roll])
     w_xyz = spm.ypr_to_xyz_velocity(w_ypr, ypr)
 
@@ -48,7 +48,7 @@ def main():
     # verify positional kinematics with matching rotation matrices
     print("ypr:", ypr)
     #print("fpk_ypr:", ypr_fpk)
-
+    print("act_angles:", actuator_angles)
     # verify Jacobian and ypr_to_xyz transformation functions with a 
     # discrete approximation based on positional kinematics
     dt_epsilon = 1e-6 # arbitrarily small time change
