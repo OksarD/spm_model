@@ -75,7 +75,7 @@ Matrix3f R_axis(const Vector3f& axis, float angle) {
 
 Coaxial_SPM::Coaxial_SPM(float a1_, float a2_, float b_)
     : a1(a1_), a2(a2_), b(b_), u(0,0,-1), n_origin(0,0,1),
-      actuator_origin(PI), actuator_direction(-1),
+      actuator_origin(solve_ipk(Matrix3f::Identity())[0]), actuator_direction(-1),
       sin_a1(sin(a1_)), cos_a1(cos(a1_)),
       sin_a2(sin(a2_)), cos_a2(cos(a2_)),
       sin_b(sin(b_)), cos_b(cos(b_))

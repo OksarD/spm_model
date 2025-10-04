@@ -5,3 +5,7 @@ matlab/slprj
 cpp/libs/
 cpp/a.exe
 *.csv
+
+python/table_formatted.txt
+
+python/ypr_table.npy

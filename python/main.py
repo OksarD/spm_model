@@ -10,9 +10,9 @@ np.set_printoptions(formatter={'float': '{:.3f}'.format})
 # https://link.springer.com/chapter/10.1007/978-3-030-75271-2_4
 
 # Parameters
-a1 = pi/4; # alpha 1
-a2 = pi/2; # alpha 2
-b = pi/2; # beta
+a1 = radians(50); # alpha 1
+a2 = radians(75); # alpha 2
+b = radians(100); # beta
 
 spm = manipulator.Coaxial_SPM(a1, a2, b)
 
@@ -25,14 +25,14 @@ def main():
     ax = fig.add_subplot(111, projection='3d')
 
     # Desired angle in ypr (rad/s)
-    yaw = 1
+    yaw = 0
     pitch = 0
     roll = 0
     ypr = np.array([wrap_rad(yaw),wrap_rad(pitch),wrap_rad(roll)])
     R_ypr = spm.R_ypr(ypr)
     print("R_ypr ", R_ypr)
     # Desired angular velocity in ypr (rad/s)
-    w_yaw = 1
+    w_yaw = 0
     w_pitch = 0
     w_roll = 0
     w_ypr = np.array([w_yaw, w_pitch, w_roll])
@@ -43,7 +43,7 @@ def main():
     # solve kinematics
     actuator_angles = spm.solve_ipk(R_ypr)
     actuator_velocity = spm.solve_ivk(R_ypr, w_xyz)
-    ypr_fpk = spm.solve_fpk(actuator_angles)
+    #ypr_fpk = spm.solve_fpk(actuator_angles)
 
     # verify positional kinematics with matching rotation matrices
     print("ypr:", ypr)
@@ -51,12 +51,12 @@ def main():
     print("act_angles:", actuator_angles)
     # verify Jacobian and ypr_to_xyz transformation functions with a 
     # discrete approximation based on positional kinematics
-    dt_epsilon = 1e-6 # arbitrarily small time change
-    ypr_f = [ypr[i] + w_ypr[i]*dt_epsilon for i in spm.i_range]
-    a_i = spm.solve_ipk(spm.R_ypr(ypr))
-    a_f = spm.solve_ipk(spm.R_ypr(ypr_f))
-    a_delta = np.array([angle_subtract(a_f[i],a_i[i]) for i in spm.i_range])
-    actuator_velocity_approx = a_delta/dt_epsilon
+    # dt_epsilon = 1e-6 # arbitrarily small time change
+    # ypr_f = [ypr[i] + w_ypr[i]*dt_epsilon for i in spm.i_range]
+    # a_i = spm.solve_ipk(spm.R_ypr(ypr))
+    # a_f = spm.solve_ipk(spm.R_ypr(ypr_f))
+    # a_delta = np.array([angle_subtract(a_f[i],a_i[i]) for i in spm.i_range])
+    # actuator_velocity_approx = a_delta/dt_epsilon
     #print("approx actuator velocity", actuator_velocity_approx)
     print("actuator velocity", actuator_velocity)
 
@@ -73,7 +73,7 @@ def main():
         # print("Actuator velocity: %.2f" % (actuator_velocity[i]))
         plot_vector(spm.v[i], v_colours[i], ax)
         plot_vector(spm.w[i], w_colours[i], ax)
-        plot_vector(spm.v_fpk[i], fpk_v_colours[i], ax)
+        # plot_vector(spm.v_fpk[i], fpk_v_colours[i], ax)
 
     # plot graph
     ax.set_xlabel('X Axis')
@@ -83,6 +83,6 @@ def main():
     ax.set_ylim(-1,1)
     ax.set_zlim(-1,1)
     ax.set_box_aspect((1, 1, 1))
-    # plt.show()
+    plt.show()
 
 main()

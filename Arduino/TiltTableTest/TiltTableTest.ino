@@ -24,7 +24,7 @@
 #define MICROSTEP 8 // Microstepping is hardwired to 8 (M1/M0 set HIGH)
 #define MOTOR_STEPS 200 // Motor Steps per revolution
 #define MAX_SPEED 5000
-#define ROT_SCALE 3.08333
+#define ROT_SCALE 5.2 // temporary pulley with 20 teeth
 #define RAD_TO_DEG 57.29577951308232  // Constant to convert radians to degrees
 
 #define COMMAND_BUFFER_FULL_SIZE 512 // approx 16 commands at roughly 32 bytes per command
@@ -36,9 +36,9 @@
 #define DELIM '\n'
 
 // Coaxial SPM object
-float a1 = PI / 4;   // 45 deg
-float a2 = PI / 2;   // 90 deg
-float b  = PI / 2;   // 90 deg
+float a1 = radians(50);
+float a2 = radians(75);
+float b  = radians(100);
 Coaxial_SPM spm(a1, a2, b);
 
 AccelStepper stepper_1(AccelStepper::DRIVER, STEP_1, DIR_1);

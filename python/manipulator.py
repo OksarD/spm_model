@@ -24,7 +24,7 @@ class Coaxial_SPM:
         self.w_fpk = None
         self.v_fpk = None
         self.v_fpk = None
-        self.actuator_origin = pi
+        self.actuator_origin = self.solve_ipk(np.eye(3))[0]
         self.actuator_direction = -1
 
     # calculate rotation amtrix from yaw-pitch-roll input
