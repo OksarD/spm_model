@@ -1,8 +1,4 @@
-// Functions used in main sketch
-
-void update_state() {
-  state = next_state;
-}
+#include "helpers.hpp"
 
 void initializeMotors() {
   // You could configure the motor drivers here, set microstepping, etc.
@@ -83,6 +79,24 @@ char* buffer_pop() {
   return command;
 }
 
+void enable_loop_timing() {
+  loop_timing_enabled = true;
+  loop_start_time = micros();
+  loop_time_proc = 0;
+  #ifdef INFO
+  Serial.println("Loop timing enabled.");
+  #endif
+}
+
+void disable_loop_timing() {
+  if(loop_timing_enabled) {
+    loop_timing_enabled = false;
+    #ifdef INFO
+    Serial.println("Loop timing disabled.");
+    #endif
+  }
+}
+
 bool loop_timing_proc() {
   if (!loop_timing_enabled) {
     return true; // always allow loop function when loop timing is disabled
@@ -100,14 +114,65 @@ bool loop_timing_proc() {
   }
 }
 
-// Control functions
-void position_control(Vector3f ypr) {
-  
+// Estimation functions
+
+Vector3f accel_ypr(uint8_t samples) {
+  Vector3f accel(0,0,0);
+  // Get average accel reading
+  for(uint8_t i=0; i<samples; i++) {
+    accel[0] += platformIMU.readFloatAccelX();
+    accel[1] += platformIMU.readFloatAccelY();
+    accel[2] += platformIMU.readFloatAccelZ();
+  }
+  if(samples > 1) {
+    accel /= samples;
+  }
+  // unwind roll and pitch in the right-hand ENU frame
+  Vector3f ypr;
+  ypr[0] = 0; // do not set yaw
+  ypr[1] = -atan2(accel[0], accel[2]);
+  ypr[2] = atan2(accel[1], sqrt(pow(accel[0],2) + pow(accel[2],2)));
+  return ypr;
 }
 
-void open_trajectory_control(Vector3f ypr, Vector3f ypr_velocity) {
-  Matrix3f R_mat = spm.R_ypr(ypr);
-  Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_velocity, ypr);
+Vector3f gyro_xyz(uint8_t samples) {
+  Vector3f gyro(0,0,0);
+  for(uint8_t i=0; i<samples; i++) {
+    gyro[0] = radians(platformIMU.readFloatGyroX());
+    gyro[1] = radians(platformIMU.readFloatGyroY()); 
+    gyro[2] = radians(platformIMU.readFloatGyroZ());
+  }
+  if(samples > 1) {
+    gyro /= samples;
+  }
+  return gyro;
+}
+
+Vector3f ypr_estimate() {
+  Vector3f ypr_accel = accel_ypr();
+  Vector3f gyro = gyro_xyz();
+  kalman.F = gyro_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
+  kalman.predict();
+  kalman.correct(ypr_to_q(ypr_accel));
+  Vector3f ypr_estimate = q_to_ypr(kalman.state());
+}
+
+// Control functions
+void position_control(Vector3f ypr_ref, Vector3f ypr_meas) {
+  Vector3f error = ypr_meas - ypr_ref;
+  Vector3f control_signal = 10*error; // proportional controller
+  Matrix3f R_mat = spm.R_ypr(ypr_meas);
+  Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(control_signal, ypr_meas);
+  Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
+
+  stepper_1.setSpeed(actuator_to_motor_speed(actuator_velocity[0]));
+  stepper_2.setSpeed(actuator_to_motor_speed(actuator_velocity[1]));
+  stepper_3.setSpeed(actuator_to_motor_speed(actuator_velocity[2]));
+}
+
+void open_trajectory_control(Vector3f ypr_ref, Vector3f ypr_velocity_ref) {
+  Matrix3f R_mat = spm.R_ypr(ypr_ref);
+  Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_velocity_ref, ypr_ref);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
   #ifdef DEBUG
   Serial.print(loop_time_elapsed);
@@ -124,5 +189,4 @@ void open_trajectory_control(Vector3f ypr, Vector3f ypr_velocity) {
   stepper_2.setSpeed(actuator_to_motor_speed(actuator_velocity[1]));
   stepper_3.setSpeed(actuator_to_motor_speed(actuator_velocity[2]));
 }
-
 
