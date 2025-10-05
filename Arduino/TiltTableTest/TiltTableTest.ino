@@ -1,7 +1,7 @@
 #include "project.hpp"
 #include "helpers.hpp"
 
-uint8_t state = DEFAULT_STATE;
+uint8_t state = IDLE_STATE;
 uint8_t next_state;
 
 // Global settings
@@ -14,10 +14,11 @@ float a2 = radians(75);
 float b  = radians(100);
 Coaxial_SPM spm(a1, a2, b);
 
-// Stepper motors
-AccelStepper stepper_1(AccelStepper::DRIVER, STEP_1, DIR_1);
-AccelStepper stepper_2(AccelStepper::DRIVER, STEP_2, DIR_2);
-AccelStepper stepper_3(AccelStepper::DRIVER, STEP_3, DIR_3);
+// Stepper motors should be arranged around the Z axis (anti-clockwise from birds-eye view), 
+// starting with the motor connected to the +Y platform axis
+AccelStepper stepper_0(AccelStepper::DRIVER, STEP_1, DIR_1); 
+AccelStepper stepper_1(AccelStepper::DRIVER, STEP_2, DIR_2);
+AccelStepper stepper_2(AccelStepper::DRIVER, STEP_3, DIR_3);
 
 std::queue<char> command_buffer;
 unsigned long loop_start_time;
@@ -38,6 +39,10 @@ Matrix4f F0 = Matrix4f::Identity();
 Matrix4f H = Matrix4f::Identity();
 
 KalmanFilter<float, 4, 4> kalman(x0, P0, F0, H, Q, R);
+
+// Command message structures
+const char trajectory_message[] = {'Y','P','R','y','p','r'};
+const char position_message[] = {'Y','P','R'};
 
 void setup() {
   Serial.begin(115200);
@@ -83,7 +88,10 @@ void loop() {
     #endif
   }
   
-  bool movement_command = false;
+  // Reference signals
+  static Vector3f ypr_ref(0,0,0);
+  static Vector3f ypr_velocity_ref(0,0,0);
+
   char* command;
   if(loop_timing_proc()) {
     // code to run every loop timing proc
@@ -97,22 +105,40 @@ void loop() {
       Serial.print("Popped Command ");
       Serial.println(command);
       #endif
-      // Select states and set/reset loop timing from command prefix (first character of command)
+      // Read first character of command to perform function or set states
       switch(command[0]) {
+        // set the control reference signals
         case 'M': {
-          movement_command = true;
+          if (state == TRAJECTORY_OPEN_STATE || state == TRAJECTORY_CLOSED_STATE ) { 
+            ypr_ref = extract_position(command);
+            ypr_velocity_ref = extract_velocity(command);
+          }
+          else if (state == POSITION_STATE) {
+            ypr_ref = extract_position(command);
+          }
+          break;
         }
+        // enable/disable motors
+        case 'E': {
+          enable_motors();
+          break;
+        }
+        case 'D': {
+          disable_motors();
+          break;
+        }
+        // State transitions
         case 'H': {
           next_state = HOME_STATE;
           disable_loop_timing();
           #ifdef INFO
-          Serial.println("Device Homing.");
+          Serial.println("Device Homing Enabled");
           #endif
           break;
         }
         case 'P': {
           next_state = POSITION_STATE;
-          disable_loop_timing();
+          enable_loop_timing();
           #ifdef INFO
           Serial.println("Position Control Enabled. Command (MY<>P<>R<>)");
           #endif
@@ -134,19 +160,17 @@ void loop() {
           #endif
           break;
         }
-        case 'E': {
-          enable_motors();
-          break;
-        }
-        case 'D': {
-          disable_motors();
-          break;
-        }
         case 'T': {
           next_state = TEST_STATE;
-          disable_loop_timing();
           #ifdef INFO
           Serial.println("Test Mode Enabled");
+          #endif
+          break;
+        }
+        case 'I': {
+          next_state = IDLE_STATE;
+          #ifdef INFO
+          Serial.println("Device Idle.");
           #endif
           break;
         }
@@ -161,33 +185,73 @@ void loop() {
 
     // Execute control actions based on state
     switch(state) {
-      case DEFAULT_STATE: {
-        // do nothing
+      case IDLE_STATE: {
+        halt_motors();
         break;
       }
       case HOME_STATE: {
         Vector3f ypr_home(0,0,0);
-        Vector3f ypr_meas = accel_ypr();
+        Vector3f ypr_meas = accel_ypr(5);
         position_control(ypr_home, ypr_meas);
+        float tolerance = radians(0.2);
+        if (abs(ypr_meas[0]) < tolerance && abs(ypr_meas[1]) < tolerance && abs(ypr_meas[2]) < tolerance) {
+          halt_motors();
+          next_state = IDLE_STATE;
+          #ifdef INFO
+          Serial.println("Homing Done.");
+          #endif
+        }
         break;
       }
       case TRAJECTORY_OPEN_STATE: {
-        int traj[6];
-        extract_trajectory_command(traj, command); //get trajectory input in milliradians(/s)
-        Vector3f ypr_ref(traj[0]*0.001, traj[1]*0.001, traj[2]*0.001); // ypr reference in radians
-        Vector3f ypr_velocity_ref(traj[3]*0.001, traj[4]*0.001, traj[5]*0.001); // ypr derivative reference in rad/s
         open_trajectory_control(ypr_ref, ypr_velocity_ref);
+        break;
       }
       case TEST_STATE: {
-        stepper_1.setSpeed()
+        static bool print_accel = false;
+        static bool print_gyro = false;
+        static bool print_kalman = false;
+
+        // motors should rotate positively around the control axis (downward facing Z axis)
+        if(hasChar(command, '0')) {
+          test_motor(stepper_0);
+        }
+        if(hasChar(command, '1')) {
+          test_motor(stepper_1);
+        }
+        if(hasChar(command, '2')) {
+          test_motor(stepper_2);
+        }
+        if(hasChar(command, 'A')) {
+          print_accel = !print_accel;
+        }
+        if(hasChar(command, 'G')) {
+          print_gyro = !print_gyro;
+        }
+        if(hasChar(command, 'K')) {
+          print_kalman = !print_kalman;
+        }
+
+        // Printing
+        if(print_accel) {
+          Vector3f accel = accel_ypr();
+          Serial.print("Accel_ypr: ");
+          Serial.print(accel[0]);
+          Serial.print(",");
+          Serial.print(accel[1]);
+          Serial.print(",");
+          Serial.print(accel[2]);
+          Serial.println();
+        }
+        break;
       }
     }
   }
   // Outside loop timing (run every loop cycle)
   // Polling for stepper motors
-  stepper_1.runSpeed(); 
+  stepper_0.runSpeed(); 
+  stepper_1.runSpeed();
   stepper_2.runSpeed();
-  stepper_3.runSpeed();
   yield();
   // update state machine
   state = next_state;

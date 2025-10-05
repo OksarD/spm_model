@@ -14,13 +14,17 @@ void initializeMotors();
 void disable_motors();
 void enable_motors();
 float actuator_to_motor_speed(float input);
+void test_motor(AccelStepper m);
+void halt_motors();
 
 // buffer helpers
 void buffer_push(unsigned int length, char* items);
 char* buffer_pop();
 void clearCharArray(char* charArray, size_t size);
-void extract_trajectory_command(int traj[], const char* command);
 float ExtractValue(const char* linea, char eje);
+bool hasChar(const char* linea, char eje);
+Vector3f extract_position(char* command);
+Vector3f extract_velocity(char* command);
 
 // Loop Timing
 void enable_loop_timing();
@@ -35,4 +39,5 @@ Vector3f ypr_estimate();
 // Control functions
 void position_control(Vector3f ypr_ref, Vector3f ypr_meas);
 void open_trajectory_control(Vector3f ypr_ref, Vector3f ypr_velocity_ref);
+
 

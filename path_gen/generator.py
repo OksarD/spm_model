@@ -71,7 +71,7 @@ class pathGenerator():
 
     def generate_triangle_trajectory(self, amplitude, period, duration, filter=False):
         t = self.get_linspace(duration)
-        wave = amplitude*(2*abs(2*((t/period)-floor((t/period)+0.5)))-1)
+        wave = amplitude*(2*abs(2*(((t+period/4)/period)-floor(((t+period/4)/period)+0.5)))-1)
         if filter == True:
             wave = self.filter(wave)
         wave_deriv = np.gradient(wave, t)

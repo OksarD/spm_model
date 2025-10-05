@@ -2,13 +2,13 @@
 
 void initializeMotors() {
   // You could configure the motor drivers here, set microstepping, etc.
+    stepper_0.setMaxSpeed(MAX_SPEED);
     stepper_1.setMaxSpeed(MAX_SPEED);
     stepper_2.setMaxSpeed(MAX_SPEED);
-    stepper_3.setMaxSpeed(MAX_SPEED);
     pinMode(SLEEP_1, OUTPUT);
     pinMode(SLEEP_2, OUTPUT);
     pinMode(SLEEP_3, OUTPUT);
-    Serial.println("Stepper Motors initialization succeeded!");
+    Serial.println("Stepper Motors initialised.");
 }
 
 float ExtractValue(const char* linea, char eje) {
@@ -19,10 +19,34 @@ float ExtractValue(const char* linea, char eje) {
   return atof(index + 1);
 }
 
+bool hasChar(const char* linea, char eje) {
+  const char* index = strchr(linea, eje);
+  if (index == NULL) {
+    return 0;  
+  }
+  return 1;
+}
+
 void clearCharArray(char* charArray, size_t size) {
   for (size_t i = 0; i < size; i++) {
     charArray[i] = '\0';  // Fill each element with null character
   }
+}
+
+Vector3f extract_position(char* command) {
+  Vector3f pos(ExtractValue(command, 'Y'),
+              ExtractValue(command, 'P'),
+              ExtractValue(command, 'R')
+  );
+  return pos * 0.001; // convert to rad/s
+}
+
+Vector3f extract_velocity(char* command) {
+  Vector3f vel(ExtractValue(command, 'y'),
+              ExtractValue(command, 'p'),
+              ExtractValue(command, 'r')
+  );
+  return vel * 0.001; // convert to rad/s
 }
 
 void disable_motors(){
@@ -30,29 +54,28 @@ void disable_motors(){
   digitalWrite(SLEEP_2, LOW);
   digitalWrite(SLEEP_3, LOW);
   #ifdef DEBUG
-  Serial.println("Motors Disabled!");
+  Serial.println("Motors Disabled.");
   #endif
 }
 
-void enable_motors(){
+void halt_motors() {
+  stepper_0.setSpeed(0);
+  stepper_1.setSpeed(0);
+  stepper_2.setSpeed(0);
+}
+
+void enable_motors() {
   digitalWrite(SLEEP_1, HIGH);
   digitalWrite(SLEEP_2, HIGH);
   digitalWrite(SLEEP_3, HIGH);
+  halt_motors();
   #ifdef DEBUG
-  Serial.println("Motors Enabled!");
+  Serial.println("Motors Enabled.");
   #endif
 }
 
-void extract_trajectory_command(int traj[], const char* command){
-  // trajectory command in order (Yaw, Pitch, Roll, Yaw-Deriv, Pitch-Deriv, Roll-Deriv)
-  const char letters[] = {'Y','P','R','y','p','r'};
-  for(uint8_t i=0; i<sizeof(letters); i++) {
-    traj[i] = ExtractValue(command, letters[i]);
-  }
-}
-
 float actuator_to_motor_speed(float input) {
-  return MICROSTEP*ROT_SCALE*MOTOR_STEPS*input/(2*PI);
+  return spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS*input/(2*PI);
 }
 
 void buffer_push(unsigned int length, char* items) {
@@ -159,22 +182,36 @@ Vector3f ypr_estimate() {
 
 // Control functions
 void position_control(Vector3f ypr_ref, Vector3f ypr_meas) {
-  Vector3f error = ypr_meas - ypr_ref;
-  Vector3f control_signal = 10*error; // proportional controller
+  Vector3f error = ypr_ref - ypr_meas;
+  Vector3f control_signal = 50 * error; // proportional controller
   Matrix3f R_mat = spm.R_ypr(ypr_meas);
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(control_signal, ypr_meas);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
-
-  stepper_1.setSpeed(actuator_to_motor_speed(actuator_velocity[0]));
-  stepper_2.setSpeed(actuator_to_motor_speed(actuator_velocity[1]));
-  stepper_3.setSpeed(actuator_to_motor_speed(actuator_velocity[2]));
+  stepper_0.setSpeed(actuator_to_motor_speed(actuator_velocity[0]));
+  stepper_1.setSpeed(actuator_to_motor_speed(actuator_velocity[1]));
+  stepper_2.setSpeed(actuator_to_motor_speed(actuator_velocity[2]));
+  #ifdef DEBUG
+  Serial.print("Error: ");
+  Serial.print(error[0], 3);
+  Serial.print(", ");
+  Serial.print(error[1], 3);
+  Serial.print(", ");
+  Serial.print(error[2], 3);
+  Serial.print(" Control: ");
+  Serial.print(control_signal[0], 3);
+  Serial.print(", ");
+  Serial.print(control_signal[1], 3);
+  Serial.print(", ");
+  Serial.print(control_signal[2], 3);
+  Serial.println();
+  #endif
 }
 
 void open_trajectory_control(Vector3f ypr_ref, Vector3f ypr_velocity_ref) {
   Matrix3f R_mat = spm.R_ypr(ypr_ref);
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_velocity_ref, ypr_ref);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
-  #ifdef DEBUG
+  #ifdef INFO
   Serial.print(loop_time_elapsed);
   Serial.print(",");
   Serial.print(actuator_velocity[0], 4);
@@ -185,8 +222,18 @@ void open_trajectory_control(Vector3f ypr_ref, Vector3f ypr_velocity_ref) {
   Serial.println();
   #endif
   // convert actuator velocity (rad/s) to stepper velocity (steps/s) and set the motor speed
-  stepper_1.setSpeed(actuator_to_motor_speed(actuator_velocity[0]));
-  stepper_2.setSpeed(actuator_to_motor_speed(actuator_velocity[1]));
-  stepper_3.setSpeed(actuator_to_motor_speed(actuator_velocity[2]));
+  stepper_0.setSpeed(actuator_to_motor_speed(actuator_velocity[0]));
+  stepper_1.setSpeed(actuator_to_motor_speed(actuator_velocity[1]));
+  stepper_2.setSpeed(actuator_to_motor_speed(actuator_velocity[2]));
+}
+
+void test_motor(AccelStepper m) {
+  unsigned long time_start = millis();
+  m.setSpeed(actuator_to_motor_speed(radians(30)));
+  while(millis() - time_start < 1e3) {
+    m.runSpeed();
+    yield();
+  }
+  m.setSpeed(0);
 }
 

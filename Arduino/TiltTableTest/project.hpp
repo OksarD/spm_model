@@ -43,7 +43,7 @@
 #define DELIM '\n'
 
 // States
-#define DEFAULT_STATE 0
+#define IDLE_STATE 0
 #define HOME_STATE 1
 #define POSITION_STATE 2
 #define TRAJECTORY_OPEN_STATE 3
@@ -63,9 +63,9 @@ extern bool loop_timing_enabled;
 extern Coaxial_SPM spm;
 
 // Stepper motors
+extern AccelStepper stepper_0;
 extern AccelStepper stepper_1;
 extern AccelStepper stepper_2;
-extern AccelStepper stepper_3;
 
 extern std::queue<char> command_buffer;
 extern unsigned long loop_start_time;

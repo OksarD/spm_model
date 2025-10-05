@@ -36,8 +36,8 @@ def movement_command(y,p,r,dy,dp,dr):
 def send_command(command):
     ser.write(command.encode("ascii"))
 
-def start_command():
-    send_command("S\n")
+def open_trajectory_command():
+    send_command("O\n")
 
 def stop_command():
     send_command("X\n")
@@ -100,11 +100,11 @@ def main():
             else:
                 session_running = True
                 test_duration = 20
-                traj_p = generator.generate_zero_trajectory(test_duration)
-                traj_y = generator.generate_sin_trajectory(radians(60),4,test_duration, filter=True)
+                traj_y = generator.generate_zero_trajectory(test_duration)
+                traj_p = generator.generate_triangle_trajectory(radians(40),4,test_duration, filter=True)
                 traj_r = generator.generate_zero_trajectory(test_duration)
                 session_loop_timer = loopTimer(1/(SAMPLE_FREQUENCY*SERIAL_SPEEDUP), session_timer_callback, (traj_y, traj_p, traj_r))
-                start_command()
+                open_trajectory_command()
                 session_loop_timer.start()
                 
                 # Plot
