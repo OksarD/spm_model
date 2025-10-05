@@ -27,7 +27,7 @@ spm = manipulator.Coaxial_SPM(a1, a2, b)
 
 # Sampling Params
 SLOPE_LIMIT = radians(45)
-SAMPLE_INTERVAL = radians(1)
+SAMPLE_INTERVAL = radians(0.25)
 
 # Table Params
 TABLE_DIM = 180
