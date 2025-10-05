@@ -27,7 +27,7 @@ unsigned long loop_time_proc;
 
 // IMU
 LSM6DSO platformIMU;
-Vector3f gyro_bias;
+Vector3f gyro_bias(0,0,0);
 
 // Kalman Filter
 Matrix4f Q = 1e-2 * Matrix4f::Identity();
@@ -130,9 +130,22 @@ void loop() {
         // State transitions
         case 'H': {
           next_state = HOME_STATE;
-          disable_loop_timing();
+          halt_motors();
+          delay(1000); // let the device settle before measuring gyro drift
+          gyro_bias = gyro_xyz(100); // average a lot of samples to accurately measure drift
+          kalman = KalmanFilter<float, 4, 4>(x0, P0, F0, H, Q, R); // reset kalman filter
+          delay(2000); // let kalman filter converge
+          reset_actuator_position();
+          enable_loop_timing();
           #ifdef INFO
           Serial.println("Device Homing Enabled");
+          Serial.print("Gyro drift: ");
+          Serial.print(gyro_bias[0], 3);
+          Serial.print(", ");
+          Serial.print(gyro_bias[1], 3);
+          Serial.print(", ");
+          Serial.print(gyro_bias[2], 3);
+          Serial.println();
           #endif
           break;
         }
@@ -191,14 +204,14 @@ void loop() {
       }
       case HOME_STATE: {
         Vector3f ypr_home(0,0,0);
-        Vector3f ypr_meas = accel_ypr(5);
+        Vector3f ypr_meas = accel_ypr();
         position_control(ypr_home, ypr_meas);
-        float tolerance = radians(0.2);
-        if (abs(ypr_meas[0]) < tolerance && abs(ypr_meas[1]) < tolerance && abs(ypr_meas[2]) < tolerance) {
-          halt_motors();
+        float tolerance = radians(0.1);
+        // calibrate gyros and reset paramaters after homed
+        if (abs(ypr_meas[1]) < tolerance && abs(ypr_meas[2]) < tolerance) {
           next_state = IDLE_STATE;
           #ifdef INFO
-          Serial.println("Homing Done.");
+          Serial.println("Homing done.");
           #endif
         }
         break;
@@ -212,7 +225,6 @@ void loop() {
         static bool print_gyro = false;
         static bool print_kalman = false;
 
-        // motors should rotate positively around the control axis (downward facing Z axis)
         if(hasChar(command, '0')) {
           test_motor(stepper_0);
         }
@@ -236,11 +248,31 @@ void loop() {
         if(print_accel) {
           Vector3f accel = accel_ypr();
           Serial.print("Accel_ypr: ");
-          Serial.print(accel[0]);
+          Serial.print(accel[0], 3);
           Serial.print(",");
-          Serial.print(accel[1]);
+          Serial.print(accel[1], 3);
           Serial.print(",");
-          Serial.print(accel[2]);
+          Serial.print(accel[2], 3);
+          Serial.println();
+        }
+        if(print_gyro) {
+          Vector3f gyro = gyro_xyz();
+          Serial.print("gyro_xyz: ");
+          Serial.print(gyro[0], 3);
+          Serial.print(",");
+          Serial.print(gyro[1], 3);
+          Serial.print(",");
+          Serial.print(gyro[2], 3);
+          Serial.println();
+        }
+        if(print_kalman) {
+          Vector3f kal = ypr_estimate();
+          Serial.print("kalman_ypr: ");
+          Serial.print(kal[0], 3);
+          Serial.print(",");
+          Serial.print(kal[1], 3);
+          Serial.print(",");
+          Serial.print(kal[2], 3);
           Serial.println();
         }
         break;

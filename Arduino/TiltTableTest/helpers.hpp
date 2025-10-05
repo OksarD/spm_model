@@ -16,6 +16,9 @@ void enable_motors();
 float actuator_to_motor_speed(float input);
 void test_motor(AccelStepper m);
 void halt_motors();
+void set_actuator_velocity();
+void reset_actuator_position();
+Vector3f actuator_position();
 
 // buffer helpers
 void buffer_push(unsigned int length, char* items);
@@ -32,10 +35,9 @@ void disable_loop_timing();
 bool loop_timing_proc();
 
 // Estimation functions
-Vector3f accel_ypr(uint8_t samples = 1);
-Vector3f gyro_xyz(uint8_t samples = 1);
+Vector3f accel_ypr(unsigned int samples = 1);
+Vector3f gyro_xyz(unsigned int samples = 1);
 Vector3f ypr_estimate();
-
 // Control functions
 void position_control(Vector3f ypr_ref, Vector3f ypr_meas);
 void open_trajectory_control(Vector3f ypr_ref, Vector3f ypr_velocity_ref);

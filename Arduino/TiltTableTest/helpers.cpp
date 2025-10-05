@@ -74,8 +74,12 @@ void enable_motors() {
   #endif
 }
 
-float actuator_to_motor_speed(float input) {
-  return spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS*input/(2*PI);
+float actuator_to_motor(float act) {
+  return spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS*act/(2*PI);
+}
+
+float motor_to_actuator(float mot) {
+  return 2*PI*mot/(spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS);
 }
 
 void buffer_push(unsigned int length, char* items) {
@@ -100,6 +104,26 @@ char* buffer_pop() {
     command_buffer.pop(); // pop the delimiter character as well
   }
   return command;
+}
+
+void set_actuator_velocity(Vector3f actuator_velocity) {
+  stepper_0.setSpeed(actuator_to_motor(actuator_velocity[0]));
+  stepper_1.setSpeed(actuator_to_motor(actuator_velocity[1]));
+  stepper_2.setSpeed(actuator_to_motor(actuator_velocity[2]));
+}
+
+void reset_actuator_position() {
+  stepper_0.setCurrentPosition(actuator_to_motor(spm.actuator_origin));
+  stepper_1.setCurrentPosition(actuator_to_motor(spm.actuator_origin));
+  stepper_2.setCurrentPosition(actuator_to_motor(spm.actuator_origin));
+}
+
+Vector3f actuator_position() {
+  Vector3f pos(motor_to_actuator(stepper_0.currentPosition()),
+          motor_to_actuator(stepper_1.currentPosition()),
+          motor_to_actuator(stepper_2.currentPosition())
+  );
+  return pos;
 }
 
 void enable_loop_timing() {
@@ -139,7 +163,7 @@ bool loop_timing_proc() {
 
 // Estimation functions
 
-Vector3f accel_ypr(uint8_t samples) {
+Vector3f accel_ypr(unsigned int samples) {
   Vector3f accel(0,0,0);
   // Get average accel reading
   for(uint8_t i=0; i<samples; i++) {
@@ -158,12 +182,12 @@ Vector3f accel_ypr(uint8_t samples) {
   return ypr;
 }
 
-Vector3f gyro_xyz(uint8_t samples) {
+Vector3f gyro_xyz(unsigned int samples) {
   Vector3f gyro(0,0,0);
   for(uint8_t i=0; i<samples; i++) {
-    gyro[0] = radians(platformIMU.readFloatGyroX());
-    gyro[1] = radians(platformIMU.readFloatGyroY()); 
-    gyro[2] = radians(platformIMU.readFloatGyroZ());
+    gyro[0] += radians(platformIMU.readFloatGyroX());
+    gyro[1] += radians(platformIMU.readFloatGyroY()); 
+    gyro[2] += radians(platformIMU.readFloatGyroZ());
   }
   if(samples > 1) {
     gyro /= samples;
@@ -173,24 +197,22 @@ Vector3f gyro_xyz(uint8_t samples) {
 
 Vector3f ypr_estimate() {
   Vector3f ypr_accel = accel_ypr();
-  Vector3f gyro = gyro_xyz();
+  Vector3f gyro = gyro_xyz() - gyro_bias;
   kalman.F = gyro_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
   kalman.predict();
   kalman.correct(ypr_to_q(ypr_accel));
-  Vector3f ypr_estimate = q_to_ypr(kalman.state());
+  return q_to_ypr(kalman.state());
 }
 
 // Control functions
 void position_control(Vector3f ypr_ref, Vector3f ypr_meas) {
   Vector3f error = ypr_ref - ypr_meas;
-  Vector3f control_signal = 50 * error; // proportional controller
+  Vector3f control_signal = 0.5 * error; // proportional controller
   Matrix3f R_mat = spm.R_ypr(ypr_meas);
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(control_signal, ypr_meas);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
-  stepper_0.setSpeed(actuator_to_motor_speed(actuator_velocity[0]));
-  stepper_1.setSpeed(actuator_to_motor_speed(actuator_velocity[1]));
-  stepper_2.setSpeed(actuator_to_motor_speed(actuator_velocity[2]));
-  #ifdef DEBUG
+  set_actuator_velocity(actuator_velocity);
+  #ifdef INFO
   Serial.print("Error: ");
   Serial.print(error[0], 3);
   Serial.print(", ");
@@ -203,6 +225,18 @@ void position_control(Vector3f ypr_ref, Vector3f ypr_meas) {
   Serial.print(control_signal[1], 3);
   Serial.print(", ");
   Serial.print(control_signal[2], 3);
+  Serial.print(" Act Vel: ");
+  Serial.print(actuator_velocity[0], 3);
+  Serial.print(",");
+  Serial.print(actuator_velocity[1], 3);
+  Serial.print(",");
+  Serial.print(actuator_velocity[2], 3);
+  Serial.print(" M_speed: ");
+  Serial.print(stepper_0.speed());
+  Serial.print(",");
+  Serial.print(stepper_1.speed());
+  Serial.print(",");
+  Serial.print(stepper_2.speed());
   Serial.println();
   #endif
 }
@@ -211,25 +245,26 @@ void open_trajectory_control(Vector3f ypr_ref, Vector3f ypr_velocity_ref) {
   Matrix3f R_mat = spm.R_ypr(ypr_ref);
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_velocity_ref, ypr_ref);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
+  set_actuator_velocity(actuator_velocity);
   #ifdef INFO
-  Serial.print(loop_time_elapsed);
+  Serial.print(actuator_velocity[0], 3);
   Serial.print(",");
-  Serial.print(actuator_velocity[0], 4);
+  Serial.print(actuator_velocity[1], 3);
   Serial.print(",");
-  Serial.print(actuator_velocity[1], 4);
+  Serial.print(actuator_velocity[2], 3);
+  Serial.print(" M_speed: ");
+  Serial.print(stepper_0.speed());
   Serial.print(",");
-  Serial.print(actuator_velocity[2], 4);
+  Serial.print(stepper_1.speed());
+  Serial.print(",");
+  Serial.print(stepper_2.speed());
   Serial.println();
   #endif
-  // convert actuator velocity (rad/s) to stepper velocity (steps/s) and set the motor speed
-  stepper_0.setSpeed(actuator_to_motor_speed(actuator_velocity[0]));
-  stepper_1.setSpeed(actuator_to_motor_speed(actuator_velocity[1]));
-  stepper_2.setSpeed(actuator_to_motor_speed(actuator_velocity[2]));
 }
 
 void test_motor(AccelStepper m) {
   unsigned long time_start = millis();
-  m.setSpeed(actuator_to_motor_speed(radians(30)));
+  m.setSpeed(actuator_to_motor(radians(30))); // move +30 degrees around control axis (-Z)
   while(millis() - time_start < 1e3) {
     m.runSpeed();
     yield();

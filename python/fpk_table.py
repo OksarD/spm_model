@@ -14,7 +14,7 @@ np.set_printoptions(formatter={'float': '{:.3f}'.format})
 # config
 SAVE_TABLE = True
 PLOT_TABLE = True
-LOAD_TABLE = False
+LOAD_TABLE = True
 FILENAME_TABLE = "ypr_table.npy"
 FILENAME_TABLE_TXT = "table_formatted.txt"
 
@@ -48,29 +48,14 @@ class sample_point:
         self.act_dist = None
 
 def format_table(arr):
-    f_table = []
     f_table_str = ""
     for row in arr:
-        f_row = []
         for point in row:
-            if type(point) == list or type(point) == np.ndarray:
-            # will format if the point is a vector or scalar
-                for i in point:
-                    f_point = []
-                    if np.isnan(i):
-                        f_point.append(NAN_CODE) # error value if the fpk function doesnt solve
-                    else:
-                        f_point.append(float(i))
-                    f_row.append(f_point)
-            else:
                 if np.isnan(point):
-                    f_row.append(NAN_CODE) # error value if the fpk function doesnt solve
+                    f_table_str += str(NAN_CODE) + ", " # error value if the fpk function doesnt solve
                 else:
-                    f_row.append(float(point))
-        f_table.append(f_row)
-    for i in f_table[:-1]:
-        f_table_str += format(i) + ',\n'
-    f_table_str += format(f_table[-1])
+                    f_table_str += "{:.6f}, ".format(float(point))
+        f_table_str += "\n"
     return f_table_str
 
 # Main Functions
@@ -150,7 +135,13 @@ if SAVE_TABLE:
     np.save(FILENAME_TABLE, ypr_table)
     print("Written table to", FILENAME_TABLE)
     # format only the yaw component of the table and save it as text for copying
-    table_formatted = format_table(ypr_table[:,:,0])   
-    with open(FILENAME_TABLE_TXT, "w") as f:
-        f.write(table_formatted) 
-    print("Formatted as txt and written to", FILENAME_TABLE_TXT)
+    yaw_table_formatted = format_table(ypr_table[:,:,0])  
+    pitch_table_formatted = format_table(ypr_table[:,:,1]) 
+    roll_table_formatted = format_table(ypr_table[:,:,2])
+    with open("yaw_" + FILENAME_TABLE_TXT, "w") as f:
+        f.write(yaw_table_formatted)
+    with open("pitch_" + FILENAME_TABLE_TXT, "w") as f:
+        f.write(pitch_table_formatted) 
+    with open("roll_" + FILENAME_TABLE_TXT, "w") as f:
+        f.write(roll_table_formatted) 
+    print("Formatted as txt and written to yaw/pitch/roll_" + FILENAME_TABLE_TXT)

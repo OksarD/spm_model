@@ -7,6 +7,8 @@
 using namespace std;
 using namespace Eigen;
 
+// Kalman filter class and related functions
+
 Matrix4f gyro_transition_matrix(Vector3f gyro_xyz, float dt);
 
 Vector4f ypr_to_q(Vector3f ypr);
@@ -75,3 +77,53 @@ template <typename T, int N, int M>
 Matrix<T, N, 1>& KalmanFilter<T, N, M>::state() { 
     return x; 
 }
+
+class LookupTable2D {
+public:
+    LookupTable2D(float x0, float y0, float dx, float dy,
+                  size_t nx, size_t ny, const float* data)
+        : x0_(x0), y0_(y0), dx_(dx), dy_(dy),
+          nx_(nx), ny_(ny), data_(data) {}
+
+    float interp(float x, float y) const {
+        // Compute grid coordinates
+        float gx = (x - x0_) / dx_;
+        float gy = (y - y0_) / dy_;
+
+        // Find lower-left cell corner
+        int i = static_cast<int>(floor(gx));
+        int j = static_cast<int>(floor(gy));
+
+        // Clamp to valid range
+        if (i < 0) i = 0;
+        if (j < 0) j = 0;
+        if (i >= static_cast<int>(nx_) - 1) i = nx_ - 2;
+        if (j >= static_cast<int>(ny_) - 1) j = ny_ - 2;
+
+        // Local fractional position
+        float tx = gx - i;
+        float ty = gy - j;
+
+        // Sample the 4 corner values
+        float f00 = at(i, j);
+        float f10 = at(i + 1, j);
+        float f01 = at(i, j + 1);
+        float f11 = at(i + 1, j + 1);
+
+        // Bilinear interpolation
+        return f00 * (1 - tx) * (1 - ty)
+             + f10 * tx       * (1 - ty)
+             + f01 * (1 - tx) * ty
+             + f11 * tx       * ty;
+    }
+
+private:
+    inline float at(size_t i, size_t j) const {
+        return data_[j * nx_ + i];  // Row-major
+    }
+
+    const float* data_;
+    float x0_, y0_;
+    float dx_, dy_;
+    size_t nx_, ny_;
+};

@@ -50,6 +50,26 @@
 #define TRAJECTORY_CLOSED_STATE 4
 #define TEST_STATE 5
 
+// Lookup table 
+
+// Config
+#define LOOKUP_TABLE_DIM 180
+#define LOOKUP_TABLE_SIZE 32400 // table dimension squared
+
+#define FPK_YAW_LOOKUP_TABLE
+// #define FPK_PITCH_LOOKUP_TABLE
+// #define FPK_ROLL_LOOKUP_TABLE
+
+#ifdef FPK_YAW_LOOKUP_TABLE
+extern const float yaw_table[LOOKUP_TABLE_SIZE];
+#endif
+#ifdef FPK_PITCH_LOOKUP_TABLE
+extern const float pitch_table[LOOKUP_TABLE_SIZE];
+#endif
+#ifdef FPK_ROLL_LOOKUP_TABLE
+extern const float roll_table[LOOKUP_TABLE_SIZE];
+#endif
+
 using namespace std;
 using namespace Eigen;
 
