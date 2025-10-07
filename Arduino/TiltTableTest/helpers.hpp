@@ -18,6 +18,7 @@ void halt_motors();
 void set_actuator_velocity();
 void reset_actuator_position();
 Vector3f actuator_position();
+void poll_steppers();
 
 // buffer helpers
 void buffer_push(unsigned int length, char* items);

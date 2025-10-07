@@ -9,3 +9,7 @@ cpp/a.exe
 python/table_formatted.txt
 
 python/ypr_table.npy
+
+Arduino/TiltTableTest/SparkFunLSM6DSO.cpp
+
+Arduino/TiltTableTest/SparkFunLSM6DSO.h

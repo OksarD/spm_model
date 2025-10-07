@@ -11,6 +11,12 @@ void initializeMotors() {
     Serial.println("Stepper Motors initialised.");
 }
 
+void poll_steppers() {
+  stepper_0.runSpeed();
+  stepper_1.runSpeed();
+  stepper_2.runSpeed();
+}
+
 float ExtractValue(const char* linea, char eje) {
   const char* index = strchr(linea, eje);
   if (index == NULL) {
@@ -165,8 +171,11 @@ Vector3f accel_ypr(unsigned int samples) {
   // Get average accel reading
   for(uint8_t i=0; i<samples; i++) {
     accel[0] += platformIMU.readFloatAccelX();
+    poll_steppers();
     accel[1] += platformIMU.readFloatAccelY();
+    poll_steppers();
     accel[2] += platformIMU.readFloatAccelZ();
+    poll_steppers();
   }
   if(samples > 1) {
     accel /= samples;
@@ -183,8 +192,11 @@ Vector3f gyro_xyz(unsigned int samples) {
   Vector3f gyro(0,0,0);
   for(uint8_t i=0; i<samples; i++) {
     gyro[0] += radians(platformIMU.readFloatGyroX());
-    gyro[1] += radians(platformIMU.readFloatGyroY()); 
+    poll_steppers();
+    gyro[1] += radians(platformIMU.readFloatGyroY());
+    poll_steppers(); 
     gyro[2] += radians(platformIMU.readFloatGyroZ());
+    poll_steppers();
   }
   if(samples > 1) {
     gyro /= samples;
@@ -221,12 +233,12 @@ float interp_yaw_fpk() {
 
 // Control functions
 void position_control(Vector3f ypr_error, Vector3f ypr_meas) {
-  Vector3f control_signal = 0.5 * ypr_error; // proportional controller
+  Vector3f control_signal = 1.5 * ypr_error; // proportional controller
   Matrix3f R_mat = spm.R_ypr(ypr_meas);
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(control_signal, ypr_meas);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
   set_actuator_velocity(actuator_velocity);
-  #ifdef INFO
+  #ifdef DEBUG
   Serial.print("Error: ");
   Serial.print(ypr_error[0], 3);
   Serial.print(", ");
@@ -255,17 +267,13 @@ void open_trajectory_control(Vector3f ypr_ref, Vector3f ypr_velocity_ref) {
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
   set_actuator_velocity(actuator_velocity);
   #ifdef INFO
+  Serial.print(loop_time_elapsed);
+  Serial.print(",");
   Serial.print(actuator_velocity[0], 3);
   Serial.print(",");
   Serial.print(actuator_velocity[1], 3);
   Serial.print(",");
   Serial.print(actuator_velocity[2], 3);
-  Serial.print(" M_speed: ");
-  Serial.print(stepper_0.speed());
-  Serial.print(",");
-  Serial.print(stepper_1.speed());
-  Serial.print(",");
-  Serial.print(stepper_2.speed());
   Serial.println();
   #endif
 }

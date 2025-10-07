@@ -17,7 +17,7 @@ session_loop_timer = None
 session_running = False
 
 ser = serial.Serial(
-    port='COM6',
+    port='COM10',
     baudrate=115200
 )
 generator = pathGenerator(SAMPLE_FREQUENCY, FILTER_FREQUENCY)
@@ -100,8 +100,8 @@ def main():
             else:
                 session_running = True
                 test_duration = 20
-                traj_y = generator.generate_sin_trajectory(radians(40),4,test_duration, filter=True)
-                traj_p = generator.generate_sin_trajectory(radians(40),4,test_duration, filter=True)
+                traj_y = generator.generate_sin_trajectory(radians(90),2.5,test_duration, filter=True)
+                traj_p = generator.generate_sin_trajectory(radians(40),2.5,test_duration, filter=True)
                 traj_r = generator.generate_zero_trajectory(test_duration)
                 session_loop_timer = loopTimer(1/(SAMPLE_FREQUENCY*SERIAL_SPEEDUP), session_timer_callback, (traj_y, traj_p, traj_r))
                 open_trajectory_command()
