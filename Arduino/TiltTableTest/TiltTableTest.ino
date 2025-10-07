@@ -28,6 +28,7 @@ unsigned long loop_time_proc;
 // IMU
 LSM6DSO platformIMU;
 Vector3f gyro_bias(0,0,0);
+Vector3f ypr_zero(0,0,0);
 
 // Kalman Filter
 Matrix4f Q = 1e-2 * Matrix4f::Identity();
@@ -40,9 +41,11 @@ Matrix4f H = Matrix4f::Identity();
 
 KalmanFilter<float, 4, 4> kalman(x0, P0, F0, H, Q, R);
 
-// Command message structures
-const char trajectory_message[] = {'Y','P','R','y','p','r'};
-const char position_message[] = {'Y','P','R'};
+// Lookup Table forward-kinematics
+float fpk_xy0 = spm.actuator_origin - PI; // table is centered around actuator origin, and extends to +/- pi
+float fpk_dxy = 2*PI/LOOKUP_TABLE_DIM;
+LookupTable2D fpk_yaw_table(fpk_xy0, fpk_xy0, fpk_dxy, fpk_dxy,
+                  LOOKUP_TABLE_DIM, LOOKUP_TABLE_DIM, yaw_table);
 
 void setup() {
   Serial.begin(115200);
@@ -89,9 +92,10 @@ void loop() {
   }
   
   // Reference signals
-  static Vector3f ypr_ref(0,0,0);
-  static Vector3f ypr_velocity_ref(0,0,0);
+  static Vector3f ypr_ref = ypr_zero;
+  static Vector3f ypr_velocity_ref = ypr_zero;
 
+  static bool movement_ongoing = false;
   char* command;
   if(loop_timing_proc()) {
     // code to run every loop timing proc
@@ -109,6 +113,7 @@ void loop() {
       switch(command[0]) {
         // set the control reference signals
         case 'M': {
+          movement_ongoing = true;
           if (state == TRAJECTORY_OPEN_STATE || state == TRAJECTORY_CLOSED_STATE ) { 
             ypr_ref = extract_position(command);
             ypr_velocity_ref = extract_velocity(command);
@@ -127,18 +132,19 @@ void loop() {
           disable_motors();
           break;
         }
-        // State transitions
+        // State selection
         case 'H': {
           next_state = HOME_STATE;
           halt_motors();
+          #ifdef INFO
+          Serial.println("Device Homing... ");
+          #endif
           delay(1000); // let the device settle before measuring gyro drift
           gyro_bias = gyro_xyz(100); // average a lot of samples to accurately measure drift
           kalman = KalmanFilter<float, 4, 4>(x0, P0, F0, H, Q, R); // reset kalman filter
           delay(2000); // let kalman filter converge
-          reset_actuator_position();
           enable_loop_timing();
           #ifdef INFO
-          Serial.println("Device Homing Enabled");
           Serial.print("Gyro drift: ");
           Serial.print(gyro_bias[0], 3);
           Serial.print(", ");
@@ -200,24 +206,53 @@ void loop() {
     switch(state) {
       case IDLE_STATE: {
         halt_motors();
+        movement_ongoing = false;
         break;
       }
       case HOME_STATE: {
-        Vector3f ypr_home(0,0,0);
-        Vector3f ypr_meas = accel_ypr();
-        position_control(ypr_home, ypr_meas);
-        float tolerance = radians(0.1);
-        // calibrate gyros and reset paramaters after homed
-        if (abs(ypr_meas[1]) < tolerance && abs(ypr_meas[2]) < tolerance) {
+        Vector3f ypr_meas = ypr_estimate(false);
+        Vector3f error = subtract_angles(ypr_zero, ypr_meas);
+        position_control(error, ypr_meas);
+        float tolerance = radians(0.25);
+        // reset actuator position after homed
+        if (abs(error[1]) < tolerance && abs(error[2]) < tolerance) {
           next_state = IDLE_STATE;
+          reset_actuator_position();
           #ifdef INFO
           Serial.println("Homing done.");
           #endif
         }
         break;
       }
+      case POSITION_STATE: {
+        if (movement_ongoing) {
+          Vector3f ypr_meas = ypr_estimate();
+          Vector3f error = subtract_angles(ypr_ref, ypr_meas);
+          position_control(error, ypr_estimate());
+          float tolerance = radians(0.25);
+          // move to idle state when done
+          if (abs(error[0]) < tolerance && abs(error[1]) < tolerance && abs(error[2]) < tolerance) {
+            #ifdef INFO
+            movement_ongoing = false;
+            halt_motors();
+            Serial.print("Moved to ");
+            Serial.print(ypr_ref[0]);
+            Serial.print(", ");
+            Serial.print(ypr_ref[1]);
+            Serial.print(", ");
+            Serial.print(ypr_ref[2]);
+            Serial.println();
+            #endif
+          }
+          break;
+        }
+      }
       case TRAJECTORY_OPEN_STATE: {
-        open_trajectory_control(ypr_ref, ypr_velocity_ref);
+        if (movement_ongoing) {
+          open_trajectory_control(ypr_ref, ypr_velocity_ref);
+        } else {
+          halt_motors();
+        }
         break;
       }
       case TEST_STATE: {
@@ -226,13 +261,13 @@ void loop() {
         static bool print_kalman = false;
 
         if(hasChar(command, '0')) {
-          test_motor(stepper_0);
+          stepper_0.setSpeed(actuator_to_motor_speed(radians(20)));
         }
         if(hasChar(command, '1')) {
-          test_motor(stepper_1);
+          stepper_1.setSpeed(actuator_to_motor_speed(radians(20)));
         }
         if(hasChar(command, '2')) {
-          test_motor(stepper_2);
+          stepper_2.setSpeed(actuator_to_motor_speed(radians(20)));
         }
         if(hasChar(command, 'A')) {
           print_accel = !print_accel;

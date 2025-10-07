@@ -71,6 +71,38 @@ Matrix3f R_axis(const Vector3f& axis, float angle) {
     return R;
 }
 
+bool isclose(float a, float b, float tol) {
+    return fabs(a - b) < tol;
+}
+
+float subtract_angles(float a1, float a2) {
+    float opt[] = {a1 - a2 + 2*PI,
+                a1 - a2 - 2*PI, 
+                a1 - a2};
+    float closest = FLT_MAX;
+    for (uint8_t i=0; i<3; i++) {
+        if (abs(opt[i]) < abs(closest)) {
+            closest = opt[i];
+        }
+    }
+    return closest;
+}
+
+Vector3f subtract_angles(Vector3f a1, Vector3f a2) {
+    Vector3f opt[] = {a1 - a2 + Vector3f::Constant(2*PI),
+                a1 - a2 - Vector3f::Constant(2*PI), 
+                a1 - a2};
+    Vector3f closest = Vector3f::Constant(FLT_MAX);
+    for (uint8_t i=0; i<3; i++) {
+        for (uint8_t j=0; j<3; j++) {
+            if (abs(opt[i][j]) < abs(closest[j])) {
+                closest[j] = opt[i][j];
+            }
+        }
+    }
+    return closest;
+}
+
 // ================== Coaxial_SPM Class ================== //
 
 Coaxial_SPM::Coaxial_SPM(float a1_, float a2_, float b_)
@@ -189,8 +221,4 @@ Vector3f Coaxial_SPM::ypr_to_xyz_velocity(const Vector3f& ypr_velocity, const Ve
     Matrix3f E_pitch = E_yaw * R_y(pitch);
 
     return yaw_v*z + pitch_v*(E_yaw*y) + roll_v*(E_pitch*x);
-}
-
-bool Coaxial_SPM::isclose(float a, float b, float tol) {
-    return fabs(a - b) < tol;
 }

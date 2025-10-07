@@ -6,6 +6,9 @@
 #include "CoaxialSPM.hpp"
 #include "sensor_fusion.hpp"
 
+using namespace std;
+using namespace Eigen;
+
 //--- Adjust Debugging levels Here (#define TRACE/DEBUG/INFO)
 #define INFO
 
@@ -51,27 +54,12 @@
 #define TEST_STATE 5
 
 // Lookup table 
-
-// Config
+#define FPK_NAN_CODE -999
 #define LOOKUP_TABLE_DIM 180
 #define LOOKUP_TABLE_SIZE 32400 // table dimension squared
-
 #define FPK_YAW_LOOKUP_TABLE
 // #define FPK_PITCH_LOOKUP_TABLE
 // #define FPK_ROLL_LOOKUP_TABLE
-
-#ifdef FPK_YAW_LOOKUP_TABLE
-extern const float yaw_table[LOOKUP_TABLE_SIZE];
-#endif
-#ifdef FPK_PITCH_LOOKUP_TABLE
-extern const float pitch_table[LOOKUP_TABLE_SIZE];
-#endif
-#ifdef FPK_ROLL_LOOKUP_TABLE
-extern const float roll_table[LOOKUP_TABLE_SIZE];
-#endif
-
-using namespace std;
-using namespace Eigen;
 
 extern uint8_t state;
 extern uint8_t next_state;
@@ -95,5 +83,17 @@ extern unsigned long loop_time_proc;
 // IMU
 extern LSM6DSO platformIMU;
 extern Vector3f gyro_bias;
-
 extern KalmanFilter<float, 4, 4> kalman;
+
+// Lookup table
+#ifdef FPK_YAW_LOOKUP_TABLE
+extern const float yaw_table[LOOKUP_TABLE_SIZE];
+#endif
+#ifdef FPK_PITCH_LOOKUP_TABLE
+extern const float pitch_table[LOOKUP_TABLE_SIZE];
+#endif
+#ifdef FPK_ROLL_LOOKUP_TABLE
+extern const float roll_table[LOOKUP_TABLE_SIZE];
+#endif
+
+extern LookupTable2D fpk_yaw_table;

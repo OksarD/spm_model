@@ -67,7 +67,7 @@ if LOAD_TABLE == False:
     print("Note: sample interval should be much smaller than table interval to maintain accuracy")
     print("Table Interval (deg):", 360/TABLE_DIM)
     print("Sample Interval (deg):", degrees(SAMPLE_INTERVAL))
-    print("Motor origin", spm.actuator_origin)
+    print("Actuator origin", spm.actuator_origin)
     print("Sampling Operating Region for near-origin positions...   ")
     for y in yaw_range:
         for p in tilt_range:

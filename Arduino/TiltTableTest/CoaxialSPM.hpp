@@ -4,6 +4,7 @@
 #include <complex>
 #include <stdexcept>
 #include <vector>
+#include <float.h>
 
 using namespace Eigen;
 using namespace std;
@@ -22,11 +23,17 @@ float angle_between(const Vector3f& a, const Vector3f& b);
 // Wrap radians [-pi, pi)
 float wrap_rad(float angle);
 
+// Subtracts angles a1-a2 accounting for discontinuity
+float subtract_angles(float a1, float a2);
+Vector3f subtract_angles(Vector3f a1, Vector3f a2);
+
 // Rotation matrices
 Matrix3f R_x(float a);
 Matrix3f R_y(float a);
 Matrix3f R_z(float a);
 Matrix3f R_axis(const Vector3f& axis, float angle);
+
+bool isclose(float a, float b, float tol=1e-6);
 
 // ================== Coaxial_SPM Class ================== //
 
@@ -77,7 +84,4 @@ public:
 
     // YPR velocity to angular velocity
     Vector3f ypr_to_xyz_velocity(const Vector3f& ypr_velocity, const Vector3f& ypr_point);
-
-private:
-    bool isclose(float a, float b, float tol=1e-6);
 };

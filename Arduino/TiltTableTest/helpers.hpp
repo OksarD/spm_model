@@ -13,8 +13,7 @@ using namespace Eigen;
 void initializeMotors();
 void disable_motors();
 void enable_motors();
-float actuator_to_motor_speed(float input);
-void test_motor(AccelStepper m);
+void test_motor(AccelStepper& m, uint8_t ind);
 void halt_motors();
 void set_actuator_velocity();
 void reset_actuator_position();
@@ -37,9 +36,17 @@ bool loop_timing_proc();
 // Estimation functions
 Vector3f accel_ypr(unsigned int samples = 1);
 Vector3f gyro_xyz(unsigned int samples = 1);
-Vector3f ypr_estimate();
+Vector3f ypr_estimate(bool include_yaw_fpk = true);
+float interp_yaw_fpk();
+
 // Control functions
-void position_control(Vector3f ypr_ref, Vector3f ypr_meas);
+void position_control(Vector3f ypr_error, Vector3f ypr_meas);
 void open_trajectory_control(Vector3f ypr_ref, Vector3f ypr_velocity_ref);
+
+// Conversions
+long actuator_to_motor_position(float act);
+float actuator_to_motor_speed(float act);
+float motor_to_actuator_position(long mot);
+float motor_to_actuator_speed(float mot);
 
 

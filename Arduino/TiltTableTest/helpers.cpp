@@ -53,6 +53,7 @@ void disable_motors(){
   digitalWrite(SLEEP_1, LOW);
   digitalWrite(SLEEP_2, LOW);
   digitalWrite(SLEEP_3, LOW);
+  halt_motors();
   #ifdef DEBUG
   Serial.println("Motors Disabled.");
   #endif
@@ -72,14 +73,6 @@ void enable_motors() {
   #ifdef DEBUG
   Serial.println("Motors Enabled.");
   #endif
-}
-
-float actuator_to_motor(float act) {
-  return spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS*act/(2*PI);
-}
-
-float motor_to_actuator(float mot) {
-  return 2*PI*mot/(spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS);
 }
 
 void buffer_push(unsigned int length, char* items) {
@@ -107,21 +100,25 @@ char* buffer_pop() {
 }
 
 void set_actuator_velocity(Vector3f actuator_velocity) {
-  stepper_0.setSpeed(actuator_to_motor(actuator_velocity[0]));
-  stepper_1.setSpeed(actuator_to_motor(actuator_velocity[1]));
-  stepper_2.setSpeed(actuator_to_motor(actuator_velocity[2]));
+  stepper_0.setSpeed(actuator_to_motor_speed(actuator_velocity[0]));
+  stepper_1.setSpeed(actuator_to_motor_speed(actuator_velocity[1]));
+  stepper_2.setSpeed(actuator_to_motor_speed(actuator_velocity[2]));
 }
 
 void reset_actuator_position() {
-  stepper_0.setCurrentPosition(actuator_to_motor(spm.actuator_origin));
-  stepper_1.setCurrentPosition(actuator_to_motor(spm.actuator_origin));
-  stepper_2.setCurrentPosition(actuator_to_motor(spm.actuator_origin));
+  stepper_0.setCurrentPosition(actuator_to_motor_position(spm.actuator_origin));
+  stepper_1.setCurrentPosition(actuator_to_motor_position(spm.actuator_origin));
+  stepper_2.setCurrentPosition(actuator_to_motor_position(spm.actuator_origin));
+  #ifdef INFO
+  Serial.print("Actuators reset to origin position: ");
+  Serial.println(spm.actuator_origin, 3);
+  #endif
 }
 
 Vector3f actuator_position() {
-  Vector3f pos(motor_to_actuator(stepper_0.currentPosition()),
-          motor_to_actuator(stepper_1.currentPosition()),
-          motor_to_actuator(stepper_2.currentPosition())
+  Vector3f pos(motor_to_actuator_position(stepper_0.currentPosition()),
+          motor_to_actuator_position(stepper_1.currentPosition()),
+          motor_to_actuator_position(stepper_2.currentPosition())
   );
   return pos;
 }
@@ -195,30 +192,47 @@ Vector3f gyro_xyz(unsigned int samples) {
   return gyro;
 }
 
-Vector3f ypr_estimate() {
-  Vector3f ypr_accel = accel_ypr();
+Vector3f ypr_estimate(bool include_yaw_fpk) {
+  Vector3f ypr_meas = accel_ypr();
+  if (include_yaw_fpk) { 
+    ypr_meas[0] = interp_yaw_fpk();
+    if (isclose(ypr_meas[0], FPK_NAN_CODE)) {
+      disable_motors();
+      next_state = IDLE_STATE;
+      Serial.println("Platform Out of Bounds! Ensure that position commands have less than a 40 degree slope.");
+      Vector3f nan_ypr(-999,-999,-999);
+      return nan_ypr;
+    }
+  }
   Vector3f gyro = gyro_xyz() - gyro_bias;
   kalman.F = gyro_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
   kalman.predict();
-  kalman.correct(ypr_to_q(ypr_accel));
+  kalman.correct(ypr_to_q(ypr_meas));
   return q_to_ypr(kalman.state());
 }
 
+float interp_yaw_fpk() {
+  Vector3f act_pos = actuator_position();
+  float offset = spm.actuator_direction*(act_pos[0] - spm.actuator_origin);
+  Vector3f actuator_offset = act_pos - Vector3f::Constant(offset); // offset the actuator position such that m0 is placed at the origin
+  float yaw_offset = fpk_yaw_table.interp(actuator_offset[1], actuator_offset[2]); // fpk table is in the m1/m2 domain
+  return wrap_rad(yaw_offset + offset); // add the offset back to obtain the true yaw value
+}
+
 // Control functions
-void position_control(Vector3f ypr_ref, Vector3f ypr_meas) {
-  Vector3f error = ypr_ref - ypr_meas;
-  Vector3f control_signal = 0.5 * error; // proportional controller
+void position_control(Vector3f ypr_error, Vector3f ypr_meas) {
+  Vector3f control_signal = 0.5 * ypr_error; // proportional controller
   Matrix3f R_mat = spm.R_ypr(ypr_meas);
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(control_signal, ypr_meas);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
   set_actuator_velocity(actuator_velocity);
   #ifdef INFO
   Serial.print("Error: ");
-  Serial.print(error[0], 3);
+  Serial.print(ypr_error[0], 3);
   Serial.print(", ");
-  Serial.print(error[1], 3);
+  Serial.print(ypr_error[1], 3);
   Serial.print(", ");
-  Serial.print(error[2], 3);
+  Serial.print(ypr_error[2], 3);
   Serial.print(" Control: ");
   Serial.print(control_signal[0], 3);
   Serial.print(", ");
@@ -231,12 +245,6 @@ void position_control(Vector3f ypr_ref, Vector3f ypr_meas) {
   Serial.print(actuator_velocity[1], 3);
   Serial.print(",");
   Serial.print(actuator_velocity[2], 3);
-  Serial.print(" M_speed: ");
-  Serial.print(stepper_0.speed());
-  Serial.print(",");
-  Serial.print(stepper_1.speed());
-  Serial.print(",");
-  Serial.print(stepper_2.speed());
   Serial.println();
   #endif
 }
@@ -262,13 +270,47 @@ void open_trajectory_control(Vector3f ypr_ref, Vector3f ypr_velocity_ref) {
   #endif
 }
 
-void test_motor(AccelStepper m) {
-  unsigned long time_start = millis();
-  m.setSpeed(actuator_to_motor(radians(30))); // move +30 degrees around control axis (-Z)
+void test_motor(AccelStepper& m, uint8_t ind) {
+  //float start_pos = actuator_position()[ind];
+  long start_pos = m.currentPosition();
+  #ifdef INFO
+  Serial.print("Stepper ");
+  Serial.print(ind);
+  Serial.print(" Start pos: ");
+  Serial.print(start_pos);
+  #endif
+  static unsigned long time_start = millis();
+  m.setSpeed(actuator_to_motor_speed(radians(30))); // move +30 degrees/s for 1 second around control axis (-Z)
   while(millis() - time_start < 1e3) {
     m.runSpeed();
     yield();
   }
   m.setSpeed(0);
+  //float end_pos = actuator_position()[ind];
+  long end_pos = m.currentPosition();
+  #ifdef INFO
+  Serial.print(" End pos: ");
+  Serial.print(end_pos);
+  Serial.print(" Delta: ");
+  Serial.print(end_pos - start_pos);
+  Serial.println();
+  #endif
+}
+
+// Conversions
+long actuator_to_motor_position(float act) {
+  return long(spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS*act/(2*PI));
+}
+
+float actuator_to_motor_speed(float act) {
+  return spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS*act/(2*PI);
+}
+
+float motor_to_actuator_position(long mot) {
+  return 2*PI*float(mot)/(spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS);
+}
+
+float motor_to_actuator_speed(float mot) {
+  return 2*PI*mot/(spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS);
 }
 
