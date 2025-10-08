@@ -37,7 +37,7 @@ bool loop_timing_proc();
 // Estimation functions
 Vector3f accel_ypr(unsigned int samples = 1);
 Vector3f gyro_xyz(unsigned int samples = 1);
-Vector3f ypr_estimate(bool include_yaw_fpk = true);
+Quaternionf estimate(bool include_yaw_fpk = true);
 float interp_yaw_fpk();
 
 // Control functions

@@ -20,9 +20,8 @@ inline T clamp(T value, T low, T high) {
 
 Matrix4f gyro_transition_matrix(Vector3f gyro_xyz, float dt);
 
-Vector4f ypr_to_q(Vector3f ypr);
-Vector3f q_to_ypr(Vector4f q);
-Vector4f unit_q(Vector4f q);
+Quaternionf ypr_to_q(Vector3f ypr);
+Vector3f q_to_ypr(Quaternionf q);
 
 template <typename T, int N, int M>
 class KalmanFilter {

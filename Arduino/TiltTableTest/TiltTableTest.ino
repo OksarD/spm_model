@@ -35,7 +35,8 @@ Vector3f ypr_zero(0, 0, 0);
 Matrix4f Q = 1e-2 * Matrix4f::Identity();
 Matrix4f R = 1 * Matrix4f::Identity();
 Vector3f origin(0.0f, 0.0f, 0.0f);
-Vector4f x0 = ypr_to_q(origin);
+Quaternionf x0_q = ypr_to_q(origin);
+Vector4f x0 = Vector4f(x0_q.w(), x0_q.x(), x0_q.y(), x0_q.z());
 Matrix4f P0 = Matrix4f::Identity();
 Matrix4f F0 = Matrix4f::Identity();
 Matrix4f H = Matrix4f::Identity();
@@ -226,12 +227,12 @@ void loop() {
         }
       case HOME_STATE:
         {
-          Vector3f ypr_meas = ypr_estimate(false);
-          Vector3f error = subtract_angles(ypr_zero, ypr_meas);
-          position_control(error, ypr_meas);
+          Quaternionf meas = estimate(false);
+          Quaternionf error = (ypr_to_q(ypr_ref) * meas.conjugate()).normalized();
+          position_control(q_to_ypr(error), q_to_ypr(meas));
           float tolerance = radians(0.25);
           // reset actuator position after homed
-          if (abs(error[1]) < tolerance && abs(error[2]) < tolerance) {
+          if (2*acos(error.w()) < tolerance) {
             next_state = IDLE_STATE;
             reset_actuator_position();
 #ifdef INFO
@@ -243,12 +244,12 @@ void loop() {
       case POSITION_STATE:
         {
           if (movement_ongoing) {
-            Vector3f ypr_meas = ypr_estimate();
-            Vector3f error = subtract_angles(ypr_ref, ypr_meas);
-            position_control(error, ypr_meas);
+            Quaternionf meas = estimate();
+            Quaternionf error = (ypr_to_q(ypr_ref) * meas.conjugate()).normalized();
+            position_control(q_to_ypr(error), q_to_ypr(meas));
             float tolerance = radians(0.25);
             // move to idle state when done
-            if (abs(error[0]) < tolerance && abs(error[1]) < tolerance && abs(error[2]) < tolerance) {
+            if (2*acos(error.w()) < tolerance) {
 #ifdef INFO
               movement_ongoing = false;
               halt_motors();
@@ -321,13 +322,15 @@ void loop() {
             Serial.println();
           }
           if (print_kalman) {
-            Vector3f kal = ypr_estimate();
-            Serial.print("kalman_ypr: ");
-            Serial.print(kal[0], 3);
+            Quaternionf kal = estimate();
+            Serial.print("kalman: ");
+            Serial.print(kal.w(), 3);
             Serial.print(",");
-            Serial.print(kal[1], 3);
+            Serial.print(kal.x(), 3);
             Serial.print(",");
-            Serial.print(kal[2], 3);
+            Serial.print(kal.y(), 3);
+            Serial.print(",");
+            Serial.print(kal.z(), 3);
             Serial.println();
           }
           break;

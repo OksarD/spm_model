@@ -40,6 +40,20 @@ float wrap_rad(float angle) {
     return angle;
 }
 
+Vector3f wrap_rad(Vector3f angle) {
+    Vector3f wrapped;
+    for(uint8_t i=0; i<3; i++) {
+        if (angle[i] >= PI) {
+            wrapped[i] = angle[i] - 2*PI;
+        } else if (angle[i] < -PI) {
+            wrapped[i] = angle[i] + 2*PI;
+        } else {
+            wrapped[i] = angle[i];
+        }
+    }
+    return wrapped;
+}
+
 Matrix3f R_x(float a) {
     float sin_a = sin(a);
     float cos_a = cos(a);
@@ -83,49 +97,6 @@ Matrix3f R_axis(const Vector3f& axis, float angle) {
 
 bool isclose(float a, float b, float tol) {
     return fabs(a - b) < tol;
-}
-
-float subtract_angles(float a1, float a2) {
-    float opt[] = {a1 - a2 + 2*PI,
-                a1 - a2 - 2*PI, 
-                a1 - a2};
-    float closest = FLT_MAX;
-    for (uint8_t i=0; i<3; i++) {
-        if (abs(opt[i]) < abs(closest)) {
-            closest = opt[i];
-        }
-    }
-    return closest;
-}
-
-Vector3f subtract_angles(Vector3f a1, Vector3f a2) {
-    Vector3f opt[] = {a1 - a2 + Vector3f::Constant(2*PI),
-                a1 - a2 - Vector3f::Constant(2*PI), 
-                a1 - a2};
-    Vector3f closest = Vector3f::Constant(FLT_MAX);
-    for (uint8_t i=0; i<3; i++) {
-        for (uint8_t j=0; j<3; j++) {
-            if (abs(opt[i][j]) < abs(closest[j])) {
-                closest[j] = opt[i][j];
-            }
-        }
-    }
-    #ifdef DEBUG
-    Serial.print("yaw a1 a2: ");
-    Serial.print(a1[0], 3);
-    Serial.print(", ");
-    Serial.print(a2[0], 3);
-    Serial.print(" Opt_yaw: ");
-    Serial.print(opt[0][0], 3);
-    Serial.print(", ");
-    Serial.print(opt[1][0], 3);
-    Serial.print(", ");
-    Serial.print(opt[2][0], 3);
-    Serial.print(" Closest: ");
-    Serial.print(closest[0], 3);
-    Serial.println();
-    #endif
-    return closest;
 }
 
 // ================== Coaxial_SPM Class ================== //

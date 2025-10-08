@@ -23,10 +23,7 @@ float angle_between(const Vector3f& a, const Vector3f& b);
 
 // Wrap radians [-pi, pi)
 float wrap_rad(float angle);
-
-// Subtracts angles a1-a2 accounting for discontinuity
-float subtract_angles(float a1, float a2);
-Vector3f subtract_angles(Vector3f a1, Vector3f a2);
+Vector3f wrap_rad(Vector3f angle);
 
 // Rotation matrices
 Matrix3f R_x(float a);

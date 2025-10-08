@@ -204,11 +204,12 @@ Vector3f gyro_xyz(unsigned int samples) {
   return gyro;
 }
 
-Vector3f ypr_estimate(bool include_yaw_fpk) {
+Quaternionf estimate(bool include_yaw_fpk) {
   Vector3f ypr_meas = accel_ypr();
   if (include_yaw_fpk) { 
     ypr_meas[0] = interp_yaw_fpk();
   }
+  Quaternionf q_meas = ypr_to_q(ypr_meas);
   Vector3f gyro = gyro_xyz() - gyro_bias;
   kalman.F = gyro_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
   kalman.predict();
@@ -228,9 +229,8 @@ Vector3f ypr_estimate(bool include_yaw_fpk) {
   Serial.print(", ");
   Serial.print(kalman.state()[3], 3);
   #endif
-  kalman.correct(ypr_to_q(ypr_meas));
-  kalman.x = unit_q(kalman.x);
-  Vector3f k_state = q_to_ypr(kalman.state());
+  kalman.correct(Vector4f(q_meas.w(),q_meas.x(), q_meas.y(), q_meas.z()));
+  kalman.x /= kalman.x.norm();
   #ifdef DEBUG
   Serial.print(" correct: ");
   Serial.print(kalman.state()[0], 3);
@@ -240,15 +240,9 @@ Vector3f ypr_estimate(bool include_yaw_fpk) {
   Serial.print(kalman.state()[2], 3);
   Serial.print(", ");
   Serial.print(kalman.state()[3], 3);
-  Serial.print(" ypr_correct: ");
-  Serial.print(k_state[0], 3);
-  Serial.print(", ");
-  Serial.print(k_state[1], 3);
-  Serial.print(", ");
-  Serial.print(k_state[2], 3);
   Serial.println();
   #endif
-  return k_state;
+  return Quaternionf(kalman.x[0], kalman.x[1], kalman.x[2], kalman.x[3]);
 }
 
 float interp_yaw_fpk() {
