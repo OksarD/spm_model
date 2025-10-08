@@ -133,7 +133,7 @@ void enable_loop_timing() {
   loop_timing_enabled = true;
   loop_start_time = micros();
   loop_time_proc = 0;
-  #ifdef INFO
+  #ifdef DEBUG
   Serial.println("Loop timing enabled.");
   #endif
 }
@@ -141,7 +141,7 @@ void enable_loop_timing() {
 void disable_loop_timing() {
   if(loop_timing_enabled) {
     loop_timing_enabled = false;
-    #ifdef INFO
+    #ifdef DEBUG
     Serial.println("Loop timing disabled.");
     #endif
   }
@@ -154,7 +154,7 @@ bool loop_timing_proc() {
     loop_time_elapsed = micros() - loop_start_time; // elapsed time since session start
     if (loop_time_elapsed - loop_time_proc > LOOP_TIMING_INTERVAL) {
       loop_time_proc += LOOP_TIMING_INTERVAL;
-      #ifdef DEBUG
+      #ifdef TRACE
       Serial.println("Loop timing proc");
       #endif
       return true; // enable buffer read when loop timing has started
@@ -208,32 +208,87 @@ Vector3f ypr_estimate(bool include_yaw_fpk) {
   Vector3f ypr_meas = accel_ypr();
   if (include_yaw_fpk) { 
     ypr_meas[0] = interp_yaw_fpk();
-    if (isclose(ypr_meas[0], FPK_NAN_CODE)) {
-      disable_motors();
-      next_state = IDLE_STATE;
-      Serial.println("Platform Out of Bounds! Ensure that position commands have less than a 40 degree slope.");
-      Vector3f nan_ypr(-999,-999,-999);
-      return nan_ypr;
-    }
   }
   Vector3f gyro = gyro_xyz() - gyro_bias;
   kalman.F = gyro_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
   kalman.predict();
+  #ifdef DEBUG
+  Serial.print("ypr_meas ");
+  Serial.print(ypr_meas[0], 3);
+  Serial.print(", ");
+  Serial.print(ypr_meas[1], 3);
+  Serial.print(", ");
+  Serial.print(ypr_meas[2], 3);
+  Serial.print(" predict: ");
+  Serial.print(kalman.state()[0], 3);
+  Serial.print(", ");
+  Serial.print(kalman.state()[1], 3);
+  Serial.print(", ");
+  Serial.print(kalman.state()[2], 3);
+  Serial.print(", ");
+  Serial.print(kalman.state()[3], 3);
+  #endif
   kalman.correct(ypr_to_q(ypr_meas));
-  return q_to_ypr(kalman.state());
+  kalman.x = unit_q(kalman.x);
+  Vector3f k_state = q_to_ypr(kalman.state());
+  #ifdef DEBUG
+  Serial.print(" correct: ");
+  Serial.print(kalman.state()[0], 3);
+  Serial.print(", ");
+  Serial.print(kalman.state()[1], 3);
+  Serial.print(", ");
+  Serial.print(kalman.state()[2], 3);
+  Serial.print(", ");
+  Serial.print(kalman.state()[3], 3);
+  Serial.print(" ypr_correct: ");
+  Serial.print(k_state[0], 3);
+  Serial.print(", ");
+  Serial.print(k_state[1], 3);
+  Serial.print(", ");
+  Serial.print(k_state[2], 3);
+  Serial.println();
+  #endif
+  return k_state;
 }
 
 float interp_yaw_fpk() {
   Vector3f act_pos = actuator_position();
   float offset = spm.actuator_direction*(act_pos[0] - spm.actuator_origin);
-  Vector3f actuator_offset = act_pos - Vector3f::Constant(offset); // offset the actuator position such that m0 is placed at the origin
+  Vector3f actuator_offset = act_pos + Vector3f::Constant(offset); // offset the actuator position such that m0 is placed at the origin
   float yaw_offset = fpk_yaw_table.interp(actuator_offset[1], actuator_offset[2]); // fpk table is in the m1/m2 domain
+  if (yaw_offset < -PI || yaw_offset > PI) { // if yaw value out-of-bounds (NAN)
+    disable_motors();
+    next_state = IDLE_STATE;
+    Serial.println("Platform Out of Bounds! Ensure that position commands have less than a 40 degree slope.");
+    return FPK_NAN_CODE;
+  }
+  #ifdef DEBUG
+  Serial.print("act_pos: ");
+  Serial.print(act_pos[0], 3);
+  Serial.print(", ");
+  Serial.print(act_pos[1], 3);
+  Serial.print(", ");
+  Serial.print(act_pos[2], 3);
+  Serial.print(" offset: ");
+  Serial.print(offset, 3);
+  Serial.print(" act_offset: ");
+  Serial.print(actuator_offset[0], 3);
+  Serial.print(",");
+  Serial.print(actuator_offset[1], 3);
+  Serial.print(",");
+  Serial.print(actuator_offset[2], 3);
+  Serial.print(" yaw_offset: ");
+  Serial.print(yaw_offset, 3);
+  Serial.print(" yaw_interp: ");
+  Serial.print(wrap_rad(yaw_offset + offset), 3);
+  Serial.println();
+  #endif
   return wrap_rad(yaw_offset + offset); // add the offset back to obtain the true yaw value
 }
 
 // Control functions
 void position_control(Vector3f ypr_error, Vector3f ypr_meas) {
-  Vector3f control_signal = 1.5 * ypr_error; // proportional controller
+  Vector3f control_signal = 1 * ypr_error; // proportional controller
   Matrix3f R_mat = spm.R_ypr(ypr_meas);
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(control_signal, ypr_meas);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);

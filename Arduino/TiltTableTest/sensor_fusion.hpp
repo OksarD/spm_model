@@ -1,19 +1,27 @@
 #pragma once
+#include <Arduino.h>
 #include <ArduinoEigen.h>
 #include <cmath>
 #include <complex>
 #include <vector>
+#include <algorithm>
 
 using namespace std;
 using namespace Eigen;
 
 // Kalman filter class and related functions
 
+template <typename T>
+inline T clamp(T value, T low, T high) {
+    if (value < low)  return low;
+    if (value > high) return high;
+    return value;
+}
+
 Matrix4f gyro_transition_matrix(Vector3f gyro_xyz, float dt);
 
 Vector4f ypr_to_q(Vector3f ypr);
-Vector3f q_to_ypr(Vector4f quaternion);
-
+Vector3f q_to_ypr(Vector4f q);
 Vector4f unit_q(Vector4f q);
 
 template <typename T, int N, int M>
@@ -27,9 +35,9 @@ public:
     using GainMatrix = Matrix<T, N, M>;
     StateMatrix F; // state transition matrix
     MeasurementMatrix H; // state to measurement transformation
+    StateVector x; // state
 
 private:
-    StateVector x; // state
     StateMatrix P; // state covaraince
     StateMatrix Q; // state transition coveriance
     MeasurementCov R; // meaurement covariance

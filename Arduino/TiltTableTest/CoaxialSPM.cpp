@@ -1,6 +1,16 @@
 #include "CoaxialSPM.hpp"
 #include <iostream>
 
+//--- Adjust Debugging levels Here (#define TRACE/DEBUG/INFO)
+#define DEBUG
+
+#ifdef TRACE
+  #define DEBUG
+#endif
+#ifdef DEBUG
+  #define INFO
+#endif
+
 //#define VERIFY_KINEMATICS
 
 using namespace std;
@@ -100,6 +110,21 @@ Vector3f subtract_angles(Vector3f a1, Vector3f a2) {
             }
         }
     }
+    #ifdef DEBUG
+    Serial.print("yaw a1 a2: ");
+    Serial.print(a1[0], 3);
+    Serial.print(", ");
+    Serial.print(a2[0], 3);
+    Serial.print(" Opt_yaw: ");
+    Serial.print(opt[0][0], 3);
+    Serial.print(", ");
+    Serial.print(opt[1][0], 3);
+    Serial.print(", ");
+    Serial.print(opt[2][0], 3);
+    Serial.print(" Closest: ");
+    Serial.print(closest[0], 3);
+    Serial.println();
+    #endif
     return closest;
 }
 
@@ -183,11 +208,17 @@ Vector3f Coaxial_SPM::solve_ipk(const Matrix3f& r) {
 void Coaxial_SPM::verify_position() {
     for (int i=0; i<3; i++) {
         if (!isclose(angle_between(u, w[i]), a1))
-            cout <<"Rotation invalid! param a1 incorrect" << endl;
+            #ifdef DEBUG
+            Serial.print("Rotation invalid! param a1 incorrect");
+            #endif
         if (!isclose(angle_between(w[i], v[i]), a2))
-            cout << "Rotation invalid! param a2 incorrect" << endl;
+            #ifdef DEBUG
+            Serial.print("Rotation invalid! param a2 incorrect");
+            #endif
         if (!isclose(angle_between(v[i], n), b))
-            cout << "Rotation invalid! param b incorrect" << endl;
+            #ifdef DEBUG
+            Serial.print("Rotation invalid! param b incorrect");
+            #endif
     }
 }
 

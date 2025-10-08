@@ -1,4 +1,5 @@
 #pragma once
+#include <Arduino.h>
 #include <ArduinoEigen.h>
 #include <cmath>
 #include <complex>

@@ -99,6 +99,11 @@ void loop() {
   static bool movement_ongoing = false;
   char* command;
   if (loop_timing_proc()) {
+#ifdef DEBUG
+    if (state != IDLE_STATE) {
+      Serial.println("============================ DEBUG ============================");
+    }
+#endif
     // code to run every loop timing proc
     if (!command_buffer.empty()) {
 #ifdef TRACE
@@ -143,7 +148,6 @@ void loop() {
 #ifdef INFO
             Serial.println("Device Homing... ");
 #endif
-            delay(1000);                                              // let the device settle before measuring gyro drift
             gyro_bias = gyro_xyz(100);                                // average a lot of samples to accurately measure drift
             kalman = KalmanFilter<float, 4, 4>(x0, P0, F0, H, Q, R);  // reset kalman filter
             delay(2000);                                              // let kalman filter converge
@@ -241,7 +245,7 @@ void loop() {
           if (movement_ongoing) {
             Vector3f ypr_meas = ypr_estimate();
             Vector3f error = subtract_angles(ypr_ref, ypr_meas);
-            position_control(error, ypr_estimate());
+            position_control(error, ypr_meas);
             float tolerance = radians(0.25);
             // move to idle state when done
             if (abs(error[0]) < tolerance && abs(error[1]) < tolerance && abs(error[2]) < tolerance) {

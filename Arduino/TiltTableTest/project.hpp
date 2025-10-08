@@ -10,7 +10,7 @@ using namespace std;
 using namespace Eigen;
 
 //--- Adjust Debugging levels Here (#define TRACE/DEBUG/INFO)
-#define INFO
+#define DEBUG
 
 #ifdef TRACE
   #define DEBUG
@@ -54,7 +54,7 @@ using namespace Eigen;
 #define TEST_STATE 5
 
 // Lookup table 
-#define FPK_NAN_CODE -999
+#define FPK_NAN_CODE -999999
 #define LOOKUP_TABLE_DIM 180
 #define LOOKUP_TABLE_SIZE 32400 // table dimension squared
 #define FPK_YAW_LOOKUP_TABLE
