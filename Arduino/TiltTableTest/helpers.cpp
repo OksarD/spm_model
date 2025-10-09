@@ -105,7 +105,7 @@ char* buffer_pop() {
   return command;
 }
 
-void set_actuator_velocity(Vector3f actuator_velocity) {
+void set_actuator_velocity(Vector3f& actuator_velocity) {
   stepper_0.setSpeed(actuator_to_motor_speed(actuator_velocity[0]));
   stepper_1.setSpeed(actuator_to_motor_speed(actuator_velocity[1]));
   stepper_2.setSpeed(actuator_to_motor_speed(actuator_velocity[2]));
@@ -213,14 +213,28 @@ Quaternionf estimate(bool include_yaw_fpk) {
   Vector3f gyro = gyro_xyz() - gyro_bias;
   kalman.F = gyro_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
   kalman.predict();
-  #ifdef DEBUG
-  Serial.print("ypr_meas ");
-  Serial.print(ypr_meas[0], 3);
+  #ifdef TRACE
+  Serial.print("0, ");
+  Serial.print(gyro[0]);
   Serial.print(", ");
-  Serial.print(ypr_meas[1], 3);
+  Serial.print(gyro[1]);
   Serial.print(", ");
-  Serial.print(ypr_meas[2], 3);
-  Serial.print(" predict: ");
+  Serial.print(gyro[2]);
+  Serial.print(", 1, ");
+  Serial.print(ypr_meas[0]);
+  Serial.print(", ");
+  Serial.print(ypr_meas[1]);
+  Serial.print(", ");
+  Serial.print(ypr_meas[2]);
+  Serial.print(", 2, ");
+  Serial.print(q_meas.w(), 3);
+  Serial.print(", ");
+  Serial.print(q_meas.x(), 3);
+  Serial.print(", ");
+  Serial.print(q_meas.y(), 3);
+  Serial.print(", ");
+  Serial.print(q_meas.z(), 3);
+  Serial.print(", 3, ");
   Serial.print(kalman.state()[0], 3);
   Serial.print(", ");
   Serial.print(kalman.state()[1], 3);
@@ -231,8 +245,8 @@ Quaternionf estimate(bool include_yaw_fpk) {
   #endif
   kalman.correct(Vector4f(q_meas.w(),q_meas.x(), q_meas.y(), q_meas.z()));
   kalman.x /= kalman.x.norm();
-  #ifdef DEBUG
-  Serial.print(" correct: ");
+  #ifdef TRACE
+  Serial.print(", 4, ");
   Serial.print(kalman.state()[0], 3);
   Serial.print(", ");
   Serial.print(kalman.state()[1], 3);
@@ -256,7 +270,7 @@ float interp_yaw_fpk() {
     Serial.println("Platform Out of Bounds! Ensure that position commands have less than a 40 degree slope.");
     return FPK_NAN_CODE;
   }
-  #ifdef DEBUG
+  #ifdef TRACE
   Serial.print("act_pos: ");
   Serial.print(act_pos[0], 3);
   Serial.print(", ");
@@ -281,36 +295,43 @@ float interp_yaw_fpk() {
 }
 
 // Control functions
-void position_control(Vector3f ypr_error, Vector3f ypr_meas) {
-  Vector3f control_signal = 1 * ypr_error; // proportional controller
-  Matrix3f R_mat = spm.R_ypr(ypr_meas);
-  Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(control_signal, ypr_meas);
-  Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
+void position_control(Quaternionf& error, Quaternionf& meas) {
+  if (error.w() < 0.0f) {
+    error.coeffs() *= -1.0f;  // ensure shortest rotation
+  }
+  Vector3f error_xyz = aa_to_xyz(q_to_aa(error));
+  Vector3f control = 0.5 * error_xyz;
+  Matrix3f R = aa_to_R(q_to_aa(meas));
+  Vector3f actuator_velocity = spm.solve_ivk(R, control);
   set_actuator_velocity(actuator_velocity);
-  #ifdef DEBUG
-  Serial.print("Error: ");
-  Serial.print(ypr_error[0], 3);
+  #ifdef TRACE
+  //Serial.print("Error: ");
+  Serial.print(error.w(), 3);
   Serial.print(", ");
-  Serial.print(ypr_error[1], 3);
+  Serial.print(error.x(), 3);
   Serial.print(", ");
-  Serial.print(ypr_error[2], 3);
-  Serial.print(" Control: ");
-  Serial.print(control_signal[0], 3);
+  Serial.print(error.y(), 3);
   Serial.print(", ");
-  Serial.print(control_signal[1], 3);
-  Serial.print(", ");
-  Serial.print(control_signal[2], 3);
-  Serial.print(" Act Vel: ");
-  Serial.print(actuator_velocity[0], 3);
-  Serial.print(",");
-  Serial.print(actuator_velocity[1], 3);
-  Serial.print(",");
-  Serial.print(actuator_velocity[2], 3);
-  Serial.println();
+  Serial.print(error.z(), 3);
+  //Serial.print(", ");
+  //Serial.print(" Control: ");
+  // Serial.print(control[0], 3);
+  // Serial.print(", ");
+  // Serial.print(control[1], 3);
+  // Serial.print(", ");
+  // Serial.print(control[2], 3);
+  // Serial.print(", ");
+  //Serial.print(" Act Vel: ");
+  // Serial.print(actuator_velocity[0], 3);
+  // Serial.print(",");
+  // Serial.print(actuator_velocity[1], 3);
+  // Serial.print(",");
+  // Serial.print(actuator_velocity[2], 3);
+  // Serial.println();
   #endif
 }
 
-void open_trajectory_control(Vector3f ypr_ref, Vector3f ypr_velocity_ref) {
+void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref) {
   Matrix3f R_mat = spm.R_ypr(ypr_ref);
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_velocity_ref, ypr_ref);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
@@ -371,3 +392,97 @@ float motor_to_actuator_speed(float mot) {
   return 2*PI*mot/(spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS);
 }
 
+Quaternionf ypr_to_q(const Vector3f& ypr) {
+    static Quaternionf q_prev = Quaternionf::Identity();
+    float sin_y_2 = sin(ypr[0]*0.5);
+    float cos_y_2 = cos(ypr[0]*0.5);
+    float sin_p_2 = sin(ypr[1]*0.5);
+    float cos_p_2 = cos(ypr[1]*0.5);
+    float sin_r_2 = sin(ypr[2]*0.5);
+    float cos_r_2 = cos(ypr[2]*0.5); 
+    Quaternionf q;
+    q.w() = cos_r_2 * cos_p_2 * cos_y_2 + sin_r_2 * sin_p_2 * sin_y_2;
+    q.x() = sin_r_2 * cos_p_2 * cos_y_2 - cos_r_2 * sin_p_2 * sin_y_2;
+    q.y() = cos_r_2 * sin_p_2 * cos_y_2 + sin_r_2 * cos_p_2 * sin_y_2;
+    q.z() = cos_r_2 * cos_p_2 * sin_y_2 - sin_r_2 * sin_p_2 * cos_y_2;
+    if (q.dot(q_prev) < 0.0f) { // account for double-covering to maintain sign consistency
+      q.coeffs() *= -1.0f;
+    }
+    q_prev = q;
+    return q.normalized();
+}
+
+Vector3f q_to_ypr(const Quaternionf& q) {
+    Quaternionf qn = q.normalized();
+    float w = qn.w(), x = qn.x(), y = qn.y(), z = qn.z();
+    float yaw = atan2(2.0f * (w*z + x*y),
+                           1.0f - 2.0f * (y*y + z*z));
+    float sinp = 2.0f * (w*y - z*x);
+    sinp = clamp(sinp, -1.0f, 1.0f);
+    float pitch = asin(sinp);
+    float roll = atan2(2.0f * (w*x + y*z),
+                            1.0f - 2.0f * (x*x + y*y));
+    return Vector3f(yaw, pitch, roll);
+}
+
+Vector4f q_to_aa(const Quaternionf& q_in) {
+    Quaternionf q = q_in.normalized();
+    // Ensure numerical stability
+    float angle = 2.0f * acos(clamp(q.w(), -1.0f, 1.0f));
+    float s = sqrt(1.0f - q.w() * q.w());
+    Vector3f axis;
+    if (s < 1e-6f) {
+        // If the angle is very small, the axis direction doesn’t matter much
+        axis = Vector3f(1.0f, 0.0f, 0.0f);
+    } else {
+        axis = q.vec() / s;  // q.x, q.y, q.z normalized
+    }
+    Vector4f aa;
+    aa << angle, axis.x(), axis.y(), axis.z();
+    return aa;
+}
+
+// Axis-Angle to Quaternion
+Quaternionf aa_to_q(const Vector4f& aa) {
+    float angle = aa(0);
+    Vector3f axis = aa.tail<3>();
+    float half_angle = 0.5f * angle;
+    float s = sin(half_angle);
+    float c = cos(half_angle);
+    if (axis.norm() < 1e-6f)
+        axis = Vector3f(1.0f, 0.0f, 0.0f);
+    else
+        axis.normalize();
+    return Quaternionf(c, axis.x() * s, axis.y() * s, axis.z() * s);
+}
+
+Matrix3f aa_to_R(const Vector4f& aa)
+{
+    float angle = aa(0);
+    Vector3f axis = aa.tail<3>();
+    // Handle degenerate/small-angle case
+    if (axis.norm() < 1e-6f)
+        return Matrix3f::Identity();
+    axis.normalize();
+    float c = cos(angle);
+    float s = sin(angle);
+    float one_c = 1.0f - c;
+    // Rodrigues’ rotation formula
+    Matrix3f R;
+    R << c + axis.x() * axis.x() * one_c,
+         axis.x() * axis.y() * one_c - axis.z() * s,
+         axis.x() * axis.z() * one_c + axis.y() * s,
+
+         axis.y() * axis.x() * one_c + axis.z() * s,
+         c + axis.y() * axis.y() * one_c,
+         axis.y() * axis.z() * one_c - axis.x() * s,
+
+         axis.z() * axis.x() * one_c - axis.y() * s,
+         axis.z() * axis.y() * one_c + axis.x() * s,
+         c + axis.z() * axis.z() * one_c;
+    return R;
+}
+
+Vector3f aa_to_xyz(const Vector4f& aa) {
+  return Vector3f(aa[0]*aa[1], aa[0]*aa[2], aa[0]*aa[3]);
+}

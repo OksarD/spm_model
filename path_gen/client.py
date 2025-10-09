@@ -17,7 +17,7 @@ session_loop_timer = None
 session_running = False
 
 ser = serial.Serial(
-    port='COM10',
+    port='COM6',
     baudrate=115200
 )
 generator = pathGenerator(SAMPLE_FREQUENCY, FILTER_FREQUENCY)
@@ -60,8 +60,8 @@ def session_timer_callback(traj_y: trajectory, traj_p: trajectory, traj_r: traje
         halt_command()
         stop_command()
 
-def read_with_flow_control(serial_object):
-    data = serial_object.read_all()
+def read_with_flow_control():
+    data = ser.read_all()
     if data == None:
         return None
     
@@ -77,22 +77,20 @@ def read_with_flow_control(serial_object):
             data_buf.append(b)
     
     if data_buf:
-        return bytes(data_buf).decode(errors="ignore")
-    return None
+        print(bytes(data_buf).decode(errors="ignore"), end="")
 
 def main():
     global session_running
     global session_loop_timer
     print("Trajectory Generator for Coaxial Mainipulator")
     halt_command()
+    printer_thread = threading.Thread(target=read_with_flow_control, daemon=True)
+    printer_thread.start()
     # main loop
     while(True):
-        incoming_data = read_with_flow_control(ser)
-        if incoming_data != None:
-            print(incoming_data, end="")
         # Client Commands
         if not session_running:
-            line = input("->")
+            line = input("")
         if line == "T" or line == "t":
             line = None
             if (session_running == True):

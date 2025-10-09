@@ -10,7 +10,7 @@ using namespace std;
 using namespace Eigen;
 
 //--- Adjust Debugging levels Here (#define TRACE/DEBUG/INFO)
-#define DEBUG
+#define INFO
 
 #ifdef TRACE
   #define DEBUG
@@ -60,6 +60,9 @@ using namespace Eigen;
 #define FPK_YAW_LOOKUP_TABLE
 // #define FPK_PITCH_LOOKUP_TABLE
 // #define FPK_ROLL_LOOKUP_TABLE
+
+// Control
+#define POSITION_ANGLE_TOLERANCE radians(0.25)
 
 extern uint8_t state;
 extern uint8_t next_state;

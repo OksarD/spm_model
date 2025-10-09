@@ -29,7 +29,6 @@ unsigned long loop_time_proc;
 // IMU
 LSM6DSO platformIMU;
 Vector3f gyro_bias(0, 0, 0);
-Vector3f ypr_zero(0, 0, 0);
 
 // Kalman Filter
 Matrix4f Q = 1e-2 * Matrix4f::Identity();
@@ -94,15 +93,15 @@ void loop() {
   }
 
   // Reference signals
-  static Vector3f ypr_ref = ypr_zero;
-  static Vector3f ypr_velocity_ref = ypr_zero;
+  static Vector3f ypr_ref = Vector3f::Constant(0);
+  static Vector3f ypr_velocity_ref = Vector3f::Constant(0);
 
   static bool movement_ongoing = false;
   char* command;
   if (loop_timing_proc()) {
 #ifdef DEBUG
     if (state != IDLE_STATE) {
-      Serial.println("============================ DEBUG ============================");
+      //Serial.println("============================ DEBUG ============================");
     }
 #endif
     // code to run every loop timing proc
@@ -146,9 +145,11 @@ void loop() {
           {
             next_state = HOME_STATE;
             halt_motors();
+            reset_actuator_position();
 #ifdef INFO
             Serial.println("Device Homing... ");
 #endif
+            delay(500); // let robot settle
             gyro_bias = gyro_xyz(100);                                // average a lot of samples to accurately measure drift
             kalman = KalmanFilter<float, 4, 4>(x0, P0, F0, H, Q, R);  // reset kalman filter
             delay(2000);                                              // let kalman filter converge
@@ -228,11 +229,11 @@ void loop() {
       case HOME_STATE:
         {
           Quaternionf meas = estimate(false);
-          Quaternionf error = (ypr_to_q(ypr_ref) * meas.conjugate()).normalized();
-          position_control(q_to_ypr(error), q_to_ypr(meas));
-          float tolerance = radians(0.25);
+          Quaternionf ref_q = ypr_to_q(Vector3f::Constant(0));
+          Quaternionf error = (ref_q * meas.conjugate()).normalized();
+          position_control(error, meas);
           // reset actuator position after homed
-          if (2*acos(error.w()) < tolerance) {
+          if (q_to_aa(error)[0] < POSITION_ANGLE_TOLERANCE) {
             next_state = IDLE_STATE;
             reset_actuator_position();
 #ifdef INFO
@@ -245,11 +246,21 @@ void loop() {
         {
           if (movement_ongoing) {
             Quaternionf meas = estimate();
-            Quaternionf error = (ypr_to_q(ypr_ref) * meas.conjugate()).normalized();
-            position_control(q_to_ypr(error), q_to_ypr(meas));
-            float tolerance = radians(0.25);
+            Quaternionf ref_q = ypr_to_q(ypr_ref);
+            Quaternionf error = (ref_q * meas.conjugate()).normalized();
+            #ifdef DEBUG
+            Vector3f ypr_meas = q_to_ypr(meas);
+            Serial.print("meas: ");
+            Serial.print(ypr_meas[0], 3);
+            Serial.print(",");
+            Serial.print(ypr_meas[1], 3);
+            Serial.print(",");
+            Serial.print(ypr_meas[2], 3);
+            Serial.println();
+            #endif
+            position_control(error, meas);
             // move to idle state when done
-            if (2*acos(error.w()) < tolerance) {
+            if (q_to_aa(error)[0] < POSITION_ANGLE_TOLERANCE) {
 #ifdef INFO
               movement_ongoing = false;
               halt_motors();
@@ -322,15 +333,13 @@ void loop() {
             Serial.println();
           }
           if (print_kalman) {
-            Quaternionf kal = estimate();
-            Serial.print("kalman: ");
-            Serial.print(kal.w(), 3);
+            Vector3f kal = q_to_ypr(estimate());
+            Serial.print("kal: ");
+            Serial.print(kal[0], 3);
             Serial.print(",");
-            Serial.print(kal.x(), 3);
+            Serial.print(kal[1], 3);
             Serial.print(",");
-            Serial.print(kal.y(), 3);
-            Serial.print(",");
-            Serial.print(kal.z(), 3);
+            Serial.print(kal[2], 3);
             Serial.println();
           }
           break;
