@@ -2,19 +2,14 @@
 
 void initializeMotors() {
   // You could configure the motor drivers here, set microstepping, etc.
-    stepper_0.setMaxSpeed(MAX_SPEED);
-    stepper_1.setMaxSpeed(MAX_SPEED);
-    stepper_2.setMaxSpeed(MAX_SPEED);
-    pinMode(SLEEP_1, OUTPUT);
-    pinMode(SLEEP_2, OUTPUT);
-    pinMode(SLEEP_3, OUTPUT);
+    // stepper_0.setMaxSpeed(MAX_SPEED);
+    // stepper_1.setMaxSpeed(MAX_SPEED);
+    // stepper_2.setMaxSpeed(MAX_SPEED);
+    driver.begin();
+    driver.add_motor(stepper_0);
+    driver.add_motor(stepper_1);
+    driver.add_motor(stepper_2);
     Serial.println("Stepper Motors initialised.");
-}
-
-void poll_steppers() {
-  stepper_0.runSpeed();
-  stepper_1.runSpeed();
-  stepper_2.runSpeed();
 }
 
 float ExtractValue(const char* linea, char eje) {
@@ -56,9 +51,9 @@ Vector3f extract_velocity(char* command) {
 }
 
 void disable_motors(){
-  digitalWrite(SLEEP_1, LOW);
-  digitalWrite(SLEEP_2, LOW);
-  digitalWrite(SLEEP_3, LOW);
+  stepper_0.enable();
+  stepper_1.enable();
+  stepper_2.enable();
   halt_motors();
   #ifdef DEBUG
   Serial.println("Motors Disabled.");
@@ -72,9 +67,9 @@ void halt_motors() {
 }
 
 void enable_motors() {
-  digitalWrite(SLEEP_1, HIGH);
-  digitalWrite(SLEEP_2, HIGH);
-  digitalWrite(SLEEP_3, HIGH);
+  stepper_0.enable();
+  stepper_1.enable();
+  stepper_2.enable();
   halt_motors();
   #ifdef DEBUG
   Serial.println("Motors Enabled.");
@@ -112,9 +107,9 @@ void set_actuator_velocity(Vector3f& actuator_velocity) {
 }
 
 void reset_actuator_position() {
-  stepper_0.setCurrentPosition(actuator_to_motor_position(spm.actuator_origin));
-  stepper_1.setCurrentPosition(actuator_to_motor_position(spm.actuator_origin));
-  stepper_2.setCurrentPosition(actuator_to_motor_position(spm.actuator_origin));
+  stepper_0.position = actuator_to_motor_position(spm.actuator_origin);
+  stepper_1.position = actuator_to_motor_position(spm.actuator_origin);
+  stepper_2.position = actuator_to_motor_position(spm.actuator_origin);
   #ifdef INFO
   Serial.print("Actuators reset to origin position: ");
   Serial.println(spm.actuator_origin, 3);
@@ -122,9 +117,9 @@ void reset_actuator_position() {
 }
 
 Vector3f actuator_position() {
-  Vector3f pos(motor_to_actuator_position(stepper_0.currentPosition()),
-          motor_to_actuator_position(stepper_1.currentPosition()),
-          motor_to_actuator_position(stepper_2.currentPosition())
+  Vector3f pos(motor_to_actuator_position(stepper_0.position),
+          motor_to_actuator_position(stepper_1.position),
+          motor_to_actuator_position(stepper_2.position)
   );
   return pos;
 }
@@ -171,11 +166,8 @@ Vector3f accel_ypr(unsigned int samples) {
   // Get average accel reading
   for(uint8_t i=0; i<samples; i++) {
     accel[0] += platformIMU.readFloatAccelX();
-    poll_steppers();
     accel[1] += platformIMU.readFloatAccelY();
-    poll_steppers();
     accel[2] += platformIMU.readFloatAccelZ();
-    poll_steppers();
   }
   if(samples > 1) {
     accel /= samples;
@@ -192,11 +184,8 @@ Vector3f gyro_xyz(unsigned int samples) {
   Vector3f gyro(0,0,0);
   for(uint8_t i=0; i<samples; i++) {
     gyro[0] += radians(platformIMU.readFloatGyroX());
-    poll_steppers();
     gyro[1] += radians(platformIMU.readFloatGyroY());
-    poll_steppers(); 
     gyro[2] += radians(platformIMU.readFloatGyroZ());
-    poll_steppers();
   }
   if(samples > 1) {
     gyro /= samples;
@@ -348,24 +337,22 @@ void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref) {
   #endif
 }
 
-void test_motor(AccelStepper& m, uint8_t ind) {
-  //float start_pos = actuator_position()[ind];
-  long start_pos = m.currentPosition();
+void test_motor(StepperMotor& m, uint8_t ind) {
+  long start_pos = m.position;
   #ifdef INFO
   Serial.print("Stepper ");
   Serial.print(ind);
   Serial.print(" Start pos: ");
   Serial.print(start_pos);
   #endif
-  static unsigned long time_start = millis();
+  unsigned long start_time = millis();
   m.setSpeed(actuator_to_motor_speed(radians(30))); // move +30 degrees/s for 1 second around control axis (-Z)
-  while(millis() - time_start < 1e3) {
-    m.runSpeed();
-    yield();
+  while (start_time + 1e3 > millis()) {
+    m.debug_print();
+    Serial.println();
   }
   m.setSpeed(0);
-  //float end_pos = actuator_position()[ind];
-  long end_pos = m.currentPosition();
+  long end_pos = m.position;
   #ifdef INFO
   Serial.print(" End pos: ");
   Serial.print(end_pos);

@@ -2,7 +2,7 @@
 #include <queue>
 #include "SparkFunLSM6DSO.h"
 #include <math.h>
-#include <AccelStepper.h>
+#include "stepper_Driver.hpp"
 #include "CoaxialSPM.hpp"
 #include "sensor_fusion.hpp"
 
@@ -74,9 +74,10 @@ extern bool loop_timing_enabled;
 extern Coaxial_SPM spm;
 
 // Stepper motors
-extern AccelStepper stepper_0;
-extern AccelStepper stepper_1;
-extern AccelStepper stepper_2;
+extern StepperMotor stepper_0;
+extern StepperMotor stepper_1;
+extern StepperMotor stepper_2;
+extern StepperDriver driver;
 
 extern std::queue<char> command_buffer;
 extern unsigned long loop_start_time;

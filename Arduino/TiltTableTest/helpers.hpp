@@ -13,12 +13,11 @@ using namespace Eigen;
 void initializeMotors();
 void disable_motors();
 void enable_motors();
-void test_motor(AccelStepper& m, uint8_t ind);
+void test_motor(StepperMotor& m, uint8_t ind);
 void halt_motors();
 void set_actuator_velocity(Vector3f& actuator_velocity);
 void reset_actuator_position();
 Vector3f actuator_position();
-void poll_steppers();
 
 // buffer helpers
 void buffer_push(unsigned int length, char* items);

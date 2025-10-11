@@ -17,9 +17,14 @@ Coaxial_SPM spm(a1, a2, b);
 
 // Stepper motors should be arranged around the Z axis (anti-clockwise from birds-eye view),
 // starting with the motor connected to the +Y platform axis
-AccelStepper stepper_0(AccelStepper::DRIVER, STEP_1, DIR_1);
-AccelStepper stepper_1(AccelStepper::DRIVER, STEP_2, DIR_2);
-AccelStepper stepper_2(AccelStepper::DRIVER, STEP_3, DIR_3);
+StepperDriver driver(NRF_TIMER4, TIMER4_IRQn, 6);
+StepperMotor stepper_0(STEP_1, DIR_1, SLEEP_1);
+StepperMotor stepper_1(STEP_2, DIR_2, SLEEP_2);
+StepperMotor stepper_2(STEP_3, DIR_3, SLEEP_3);
+
+extern "C" void TIMER4_IRQHandler_v() {
+    driver.irq_handler();
+}
 
 std::queue<char> command_buffer;
 unsigned long loop_start_time;
@@ -293,13 +298,13 @@ void loop() {
           static bool print_kalman = false;
 
           if (hasChar(command, '0')) {
-            stepper_0.setSpeed(actuator_to_motor_speed(radians(20)));
+            test_motor(stepper_0, 0);
           }
           if (hasChar(command, '1')) {
-            stepper_1.setSpeed(actuator_to_motor_speed(radians(20)));
+            test_motor(stepper_1, 1);
           }
           if (hasChar(command, '2')) {
-            stepper_2.setSpeed(actuator_to_motor_speed(radians(20)));
+            test_motor(stepper_2, 2);
           }
           if (hasChar(command, 'A')) {
             print_accel = !print_accel;
@@ -347,7 +352,6 @@ void loop() {
     }
   }
   // Outside loop timing (run every loop cycle)
-  poll_steppers();
   yield();
   // update state machine
   state = next_state;
