@@ -68,11 +68,13 @@ def read_with_flow_control():
     data_buf = []
     for b in data:
         if b == XOFF[0]:
-            session_loop_timer.pause()
-            #print("flow paused")
+            if session_running:
+                session_loop_timer.pause()
+                print("flow paused")
         elif b == XON[0]:
-            session_loop_timer.resume()
-            #print("flow resumed")
+            if session_running:
+                session_loop_timer.resume()
+                print("flow resumed")
         else:
             data_buf.append(b)
     

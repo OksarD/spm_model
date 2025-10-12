@@ -2,6 +2,8 @@
 #include "helpers.hpp"
 #include "compensator.hpp"
 
+#define SETTLE_UPDATES 50
+
 uint8_t state = IDLE_STATE;
 uint8_t next_state;
 
@@ -54,7 +56,7 @@ LookupTable2D fpk_yaw_table(fpk_xy0, fpk_xy0, fpk_dxy, fpk_dxy,
                             LOOKUP_TABLE_DIM, LOOKUP_TABLE_DIM, yaw_table);
 
 // controller
-PID position_compensator(2.5, 0, 0, 0.025, 1.25);
+PID position_compensator(2, 0, 0, 0.04, 1);
 
 void setup() {
   Serial.begin(115200);
@@ -107,19 +109,19 @@ void loop() {
   static bool movement_ongoing = false;
   char* command;
   if (loop_timing_proc()) {
-#ifdef DEBUG
+#ifdef TRACE
     if (state != IDLE_STATE) {
-      //Serial.println("============================ DEBUG ============================");
+      Serial.println("============================ DEBUG ============================");
     }
 #endif
     // code to run every loop timing proc
     if (!command_buffer.empty()) {
-#ifdef TRACE
+#ifdef INFO
       Serial.print("Buffer length ");
       Serial.println(command_buffer.size());
 #endif
       command = buffer_pop();
-#ifdef TRACE
+#ifdef INFO
       Serial.print("Popped Command ");
       Serial.println(command);
 #endif
@@ -154,22 +156,32 @@ void loop() {
             next_state = HOME_STATE;
             position_compensator.reset();
             halt_motors();
-            reset_actuator_position();
 #ifdef INFO
             Serial.println("Device Homing... ");
 #endif
             delay(500); // let robot settle
-            gyro_bias = gyro_xyz(100);                                // average a lot of samples to accurately measure drift
+            gyro_bias = gyro_xyz(200);                                // average a lot of samples to accurately measure drift
             kalman = KalmanFilter<float, 4, 4>(x0, P0, F0, H, Q, R);  // reset kalman filter
-            delay(2000);                                              // let kalman filter converge
+            Quaternionf est;
+            for (uint32_t i=0; i<SETTLE_UPDATES; i++) { // let kalman filter converge
+              est = estimate(false);
+              delayMicroseconds(LOOP_TIMING_INTERVAL);
+            }                 
             enable_loop_timing();
-#ifdef INFO
+#ifdef DEBUG
+            Vector3f est_ypr = q_to_ypr(est);
             Serial.print("Gyro drift: ");
             Serial.print(gyro_bias[0], 3);
             Serial.print(", ");
             Serial.print(gyro_bias[1], 3);
             Serial.print(", ");
             Serial.print(gyro_bias[2], 3);
+            Serial.print("\nConverged estimate: ");
+            Serial.print(est_ypr[0], 3);
+            Serial.print(", ");
+            Serial.print(est_ypr[1], 3);
+            Serial.print(", ");
+            Serial.print(est_ypr[2], 3);
             Serial.println();
 #endif
             break;
