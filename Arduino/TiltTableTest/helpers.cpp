@@ -51,9 +51,9 @@ Vector3f extract_velocity(char* command) {
 }
 
 void disable_motors(){
-  stepper_0.enable();
-  stepper_1.enable();
-  stepper_2.enable();
+  stepper_0.disable();
+  stepper_1.disable();
+  stepper_2.disable();
   halt_motors();
   #ifdef DEBUG
   Serial.println("Motors Disabled.");

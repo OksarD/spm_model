@@ -2,7 +2,7 @@
 #include <queue>
 #include "SparkFunLSM6DSO.h"
 #include <math.h>
-#include "stepper_Driver.hpp"
+#include "stepper_driver.hpp"
 #include "CoaxialSPM.hpp"
 #include "sensor_fusion.hpp"
 
