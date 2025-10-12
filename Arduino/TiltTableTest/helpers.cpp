@@ -253,7 +253,7 @@ float interp_yaw_fpk() {
   float offset = spm.actuator_direction*(act_pos[0] - spm.actuator_origin);
   Vector3f actuator_offset = act_pos + Vector3f::Constant(offset); // offset the actuator position such that m0 is placed at the origin
   float yaw_offset = fpk_yaw_table.interp(actuator_offset[1], actuator_offset[2]); // fpk table is in the m1/m2 domain
-  if (yaw_offset < -PI || yaw_offset > PI) { // if yaw value out-of-bounds (NAN)
+  if (yaw_offset < -2*PI || yaw_offset > 2*PI) { // if yaw value drastically out-of-bounds (NAN)
     disable_motors();
     next_state = IDLE_STATE;
     Serial.println("Platform Out of Bounds! Ensure that position commands have less than a 40 degree slope.");
@@ -284,12 +284,14 @@ float interp_yaw_fpk() {
 }
 
 // Control functions
-void position_control(Quaternionf& error, Quaternionf& meas) {
-  if (error.w() < 0.0f) {
-    error.coeffs() *= -1.0f;  // ensure shortest rotation
+void position_control(Quaternionf& error, Quaternionf& meas, PID& comp) {
+  Vector4f error_aa = q_to_aa(error);
+  if (error_aa[0] < 0) {
+    error_aa *= -1;  // ensure positive angular errors only
   }
-  Vector3f error_xyz = aa_to_xyz(q_to_aa(error));
-  Vector3f control = 0.5 * error_xyz;
+  float compensated_error = comp.update(error_aa[0], LOOP_TIMING_INTERVAL/1e6); // compensate for the angle and not direction
+  error_aa[0] = compensated_error;
+  Vector3f control = aa_to_xyz(error_aa);
   Matrix3f R = aa_to_R(q_to_aa(meas));
   Vector3f actuator_velocity = spm.solve_ivk(R, control);
   set_actuator_velocity(actuator_velocity);
@@ -379,6 +381,7 @@ float motor_to_actuator_speed(float mot) {
   return 2*PI*mot/(spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS);
 }
 
+// Euler angles (yaw-pitch-roll) to quaternion
 Quaternionf ypr_to_q(const Vector3f& ypr) {
     static Quaternionf q_prev = Quaternionf::Identity();
     float sin_y_2 = sin(ypr[0]*0.5);
@@ -399,6 +402,7 @@ Quaternionf ypr_to_q(const Vector3f& ypr) {
     return q.normalized();
 }
 
+// Quaternion to euler angles (yaw-pitch-roll)
 Vector3f q_to_ypr(const Quaternionf& q) {
     Quaternionf qn = q.normalized();
     float w = qn.w(), x = qn.x(), y = qn.y(), z = qn.z();
@@ -412,24 +416,19 @@ Vector3f q_to_ypr(const Quaternionf& q) {
     return Vector3f(yaw, pitch, roll);
 }
 
+// Quaternion to axis-angle [a, x, y, z]
 Vector4f q_to_aa(const Quaternionf& q_in) {
     Quaternionf q = q_in.normalized();
     // Ensure numerical stability
     float angle = 2.0f * acos(clamp(q.w(), -1.0f, 1.0f));
     float s = sqrt(1.0f - q.w() * q.w());
-    Vector3f axis;
-    if (s < 1e-6f) {
-        // If the angle is very small, the axis direction doesn’t matter much
-        axis = Vector3f(1.0f, 0.0f, 0.0f);
-    } else {
-        axis = q.vec() / s;  // q.x, q.y, q.z normalized
-    }
+    Vector3f axis = q.vec() / s;  // q.x, q.y, q.z normalized
     Vector4f aa;
     aa << angle, axis.x(), axis.y(), axis.z();
     return aa;
 }
 
-// Axis-Angle to Quaternion
+// Axis-Angle [a, x, y, z] to Quaternion
 Quaternionf aa_to_q(const Vector4f& aa) {
     float angle = aa(0);
     Vector3f axis = aa.tail<3>();
@@ -443,6 +442,7 @@ Quaternionf aa_to_q(const Vector4f& aa) {
     return Quaternionf(c, axis.x() * s, axis.y() * s, axis.z() * s);
 }
 
+// Axis-angle [a, x, y, z] to rotation matrix
 Matrix3f aa_to_R(const Vector4f& aa)
 {
     float angle = aa(0);
@@ -470,6 +470,7 @@ Matrix3f aa_to_R(const Vector4f& aa)
     return R;
 }
 
+// Axis angle [a, x, y, z] to rotation vector
 Vector3f aa_to_xyz(const Vector4f& aa) {
   return Vector3f(aa[0]*aa[1], aa[0]*aa[2], aa[0]*aa[3]);
 }

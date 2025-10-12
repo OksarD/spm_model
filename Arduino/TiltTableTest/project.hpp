@@ -62,7 +62,7 @@ using namespace Eigen;
 // #define FPK_ROLL_LOOKUP_TABLE
 
 // Control
-#define POSITION_ANGLE_TOLERANCE radians(0.25)
+#define POSITION_ANGLE_TOLERANCE radians(0.2)
 
 extern uint8_t state;
 extern uint8_t next_state;

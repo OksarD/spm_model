@@ -8,7 +8,7 @@ using namespace std;
 class StepperMotor {
 public:
     friend class StepperDriver;
-    long position;
+    volatile long position;
 
     StepperMotor(uint8_t _stepPin, uint8_t _dirPin, uint8_t _sleepPin);
 
@@ -26,7 +26,7 @@ private:
     uint32_t cc;     
     uint8_t ccIndex;          // which CC register to use
     bool direction;           // true = forward
-    bool step_state;
+    volatile bool step_state;
     bool halted;
     uint8_t reg_max;
     NRF_TIMER_Type* timer;

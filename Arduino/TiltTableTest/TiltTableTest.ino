@@ -1,6 +1,6 @@
 #include "project.hpp"
 #include "helpers.hpp"
-//#include "SPI.h"
+#include "compensator.hpp"
 
 uint8_t state = IDLE_STATE;
 uint8_t next_state;
@@ -52,6 +52,9 @@ float fpk_xy0 = spm.actuator_origin - PI;  // table is centered around actuator 
 float fpk_dxy = 2 * PI / LOOKUP_TABLE_DIM;
 LookupTable2D fpk_yaw_table(fpk_xy0, fpk_xy0, fpk_dxy, fpk_dxy,
                             LOOKUP_TABLE_DIM, LOOKUP_TABLE_DIM, yaw_table);
+
+// controller
+PID position_compensator(2.5, 0, 0, 0.025, 1.25);
 
 void setup() {
   Serial.begin(115200);
@@ -149,6 +152,7 @@ void loop() {
         case 'H':
           {
             next_state = HOME_STATE;
+            position_compensator.reset();
             halt_motors();
             reset_actuator_position();
 #ifdef INFO
@@ -174,6 +178,7 @@ void loop() {
           {
             next_state = POSITION_STATE;
             enable_loop_timing();
+            position_compensator.reset();
 #ifdef INFO
             Serial.println("Position Control Enabled. Command (MY<>P<>R<>)");
 #endif
@@ -236,9 +241,10 @@ void loop() {
           Quaternionf meas = estimate(false);
           Quaternionf ref_q = ypr_to_q(Vector3f::Constant(0));
           Quaternionf error = (ref_q * meas.conjugate()).normalized();
-          position_control(error, meas);
+          position_control(error, meas, position_compensator);
           // reset actuator position after homed
-          if (q_to_aa(error)[0] < POSITION_ANGLE_TOLERANCE) {
+
+          if (abs(q_to_aa(error)[0]) < POSITION_ANGLE_TOLERANCE) {
             next_state = IDLE_STATE;
             reset_actuator_position();
 #ifdef INFO
@@ -263,9 +269,9 @@ void loop() {
             Serial.print(ypr_meas[2], 3);
             Serial.println();
             #endif
-            position_control(error, meas);
+            position_control(error, meas, position_compensator);
             // move to idle state when done
-            if (q_to_aa(error)[0] < POSITION_ANGLE_TOLERANCE) {
+            if (abs(q_to_aa(error)[0]) < POSITION_ANGLE_TOLERANCE) {
 #ifdef INFO
               movement_ongoing = false;
               halt_motors();

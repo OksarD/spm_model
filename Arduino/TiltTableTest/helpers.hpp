@@ -3,8 +3,10 @@
 #include "project.hpp"
 #include <ArduinoEigen.h>
 #include <cmath>
+#include <algorithm>
 #include <complex>
 #include <vector>
+#include "compensator.hpp"
 
 using namespace std;
 using namespace Eigen;
@@ -40,7 +42,7 @@ Quaternionf estimate(bool include_yaw_fpk = true);
 float interp_yaw_fpk();
 
 // Control functions
-void position_control(Quaternionf& error, Quaternionf& meas);
+void position_control(Quaternionf& error, Quaternionf& meas, PID& comp);
 void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref);
 
 // Conversions
@@ -48,14 +50,6 @@ long actuator_to_motor_position(float act);
 float actuator_to_motor_speed(float act);
 float motor_to_actuator_position(long mot);
 float motor_to_actuator_speed(float mot);
-
-// Angle conversions
-template <typename T>
-inline T clamp(T value, T low, T high) {
-    if (value < low)  return low;
-    if (value > high) return high;
-    return value;
-}
 
 Quaternionf ypr_to_q(const Vector3f& ypr);
 Vector3f q_to_ypr(const Quaternionf& q);
