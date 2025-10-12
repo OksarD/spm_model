@@ -259,6 +259,7 @@ void loop() {
           if (abs(q_to_aa(error)[0]) < POSITION_ANGLE_TOLERANCE) {
             next_state = IDLE_STATE;
             reset_actuator_position();
+            Serial.println("#F"); // send hash command to python script
 #ifdef INFO
             Serial.println("Homing done.");
 #endif
@@ -282,11 +283,11 @@ void loop() {
             Serial.println();
             #endif
             position_control(error, meas, position_compensator);
-            // move to idle state when done
             if (abs(q_to_aa(error)[0]) < POSITION_ANGLE_TOLERANCE) {
-#ifdef INFO
-              movement_ongoing = false;
+              Serial.println("#F"); // send hash command to python script
               halt_motors();
+              movement_ongoing = false;
+#ifdef INFO
               Serial.print("Moved to ");
               Serial.print(ypr_ref[0]);
               Serial.print(", ");
