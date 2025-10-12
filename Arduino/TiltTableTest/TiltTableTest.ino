@@ -116,12 +116,12 @@ void loop() {
 #endif
     // code to run every loop timing proc
     if (!command_buffer.empty()) {
-#ifdef INFO
+#ifdef TRACE
       Serial.print("Buffer length ");
       Serial.println(command_buffer.size());
 #endif
       command = buffer_pop();
-#ifdef INFO
+#ifdef TRACE
       Serial.print("Popped Command ");
       Serial.println(command);
 #endif

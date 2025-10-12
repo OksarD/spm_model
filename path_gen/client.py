@@ -4,6 +4,9 @@ from numpy import pi, sin, cos, radians, degrees
 from generator import pathGenerator, trajectory, loopTimer
 import threading
 
+# Script Config
+PLOT_TRAJECTORY = False
+
 SAMPLE_FREQUENCY = 50 # Hz
 FILTER_FREQUENCY = 10 # Hz
 SERIAL_SPEEDUP = 2 # send serial faster than the sample frequency to ensure buffer filling
@@ -36,15 +39,20 @@ def movement_command(y,p,r,dy,dp,dr):
 def send_command(command):
     ser.write(command.encode("ascii"))
 
-def open_trajectory_command():
+def set_state_open_trajectory():
     send_command("O\n")
 
-def stop_command():
-    send_command("X\n")
+def set_state_closed_trajectory():
+    send_command("O\n")
 
-def halt_command():
-    command = movement_command(0,0,0,0,0,0)
-    send_command(command)
+def set_state_idle():
+    send_command("I\n")
+
+def set_state_position():
+    send_command("P\n")
+
+def home_device():
+    send_command("H\n")
 
 def session_timer_callback(traj_y: trajectory, traj_p: trajectory, traj_r: trajectory):
     global session_running, session_loop_timer
@@ -57,70 +65,76 @@ def session_timer_callback(traj_y: trajectory, traj_p: trajectory, traj_r: traje
     except StopIteration:
         session_running = False
         session_loop_timer.stop()
-        halt_command()
-        stop_command()
+        set_state_idle()
 
 def read_with_flow_control():
-    data = ser.read_all()
-    if data == None:
-        return None
-    
-    data_buf = []
-    for b in data:
-        if b == XOFF[0]:
-            if session_running:
-                session_loop_timer.pause()
-                print("flow paused")
-        elif b == XON[0]:
-            if session_running:
-                session_loop_timer.resume()
-                print("flow resumed")
-        else:
-            data_buf.append(b)
-    
-    if data_buf:
-        print(bytes(data_buf).decode(errors="ignore"), end="")
+    while True:
+        data = ser.read_all()
+        if data == None:
+            return None
+        
+        data_buf = []
+        for b in data:
+            if b == XOFF[0]:
+                if session_running:
+                    session_loop_timer.pause()
+                    #print("flow paused")
+            elif b == XON[0]:
+                if session_running:
+                    session_loop_timer.resume()
+                    #print("flow resumed")
+            else:
+                data_buf.append(b)
+        
+        if data_buf:
+            print(bytes(data_buf).decode(errors="ignore"), end="")
+
+def open_loop_test():
+    global session_running
+    global session_loop_timer
+    session_running = True
+    test_duration = 20
+    traj_y = generator.generate_sin_trajectory(radians(90),2.5,test_duration, filter=True)
+    traj_p = generator.generate_sin_trajectory(radians(40),2.5,test_duration, filter=True)
+    traj_r = generator.generate_zero_trajectory(test_duration)
+    session_loop_timer = loopTimer(1/(SAMPLE_FREQUENCY*SERIAL_SPEEDUP), session_timer_callback, (traj_y, traj_p, traj_r))
+    set_state_open_trajectory()
+    session_loop_timer.start()
+    # Plot
+    if PLOT_TRAJECTORY:
+        if not traj_y.is_zero:
+            traj_y.plot()
+        if not traj_p.is_zero:
+            traj_p.plot()
+        if not traj_r.is_zero:
+            traj_r.plot()
 
 def main():
     global session_running
     global session_loop_timer
     print("Trajectory Generator for Coaxial Mainipulator")
-    halt_command()
     printer_thread = threading.Thread(target=read_with_flow_control, daemon=True)
     printer_thread.start()
     # main loop
     while(True):
         # Client Commands
+        line = None
         if not session_running:
             line = input("")
-        if line == "T" or line == "t":
-            line = None
-            if (session_running == True):
-                print("Cannot start a new session when one is alrady running!")
-            else:
-                session_running = True
-                test_duration = 20
-                traj_y = generator.generate_sin_trajectory(radians(90),2.5,test_duration, filter=True)
-                traj_p = generator.generate_sin_trajectory(radians(40),2.5,test_duration, filter=True)
-                traj_r = generator.generate_zero_trajectory(test_duration)
-                session_loop_timer = loopTimer(1/(SAMPLE_FREQUENCY*SERIAL_SPEEDUP), session_timer_callback, (traj_y, traj_p, traj_r))
-                open_trajectory_command()
-                session_loop_timer.start()
-                
-                # Plot
-                if not traj_y.is_zero:
-                    traj_y.plot()
-                if not traj_p.is_zero:
-                    traj_p.plot()
-                if not traj_r.is_zero:
-                    traj_r.plot()
-        
-        time.sleep(0.01)
 
         if line != None:
-            if line.startswith("-"): # use dash character '-' to bypass commands directly to the microcontroller
+            if line.startswith("#"): # use has character "#" to bypass commands directly to the microcontroller
                 command = line[1:]
                 print(command)
                 send_command(command)
+            else:
+                if (session_running == True):
+                    print("Cannot start a new session when one is alrady running!")
+                else:
+                # commands to run scripts
+                    if line == "OT":
+                        open_loop_test()
+    
+        time.sleep(0.01)
 
 main()
