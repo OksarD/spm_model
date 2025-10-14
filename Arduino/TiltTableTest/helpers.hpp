@@ -57,3 +57,35 @@ Vector4f q_to_aa(const Quaternionf& q_in);
 Quaternionf aa_to_q(const Vector4f& aa);
 Matrix3f aa_to_R(const Vector4f& aa);
 Vector3f aa_to_xyz(const Vector4f& aa);
+
+// Printing helpers
+template<typename T, int N, int M>
+void print_eigen_matrix(Matrix<T, N, M>& mat) {
+  for (uint8_t i=0; i<mat.rows(); i++) {
+    for (uint8_t j=0; j<mat.cols(); j++) {
+      Serial.print(mat(i,j), 4);
+      Serial.print(", ");
+    }
+    Serial.println();
+  }
+}
+
+template<typename T>
+void print_std_vector(std::vector<T>& vec) {
+    for (uint8_t i=0; i<vec.size(); i++) {
+      Serial.print(vec[i], 4);
+      Serial.print(", ");
+    }
+    Serial.println();
+}
+
+template<typename T, int N>
+void print_vec_eigenvec(vector<Matrix<T, N, 1>>& vec) {
+  for (uint8_t i=0; i<vec.size(); i++) {
+    for (uint8_t j=0; j<vec[0].size(); j++) {
+      Serial.print(vec[i][j], 4);
+      Serial.print(", ");
+    }
+    Serial.println();
+  }
+}

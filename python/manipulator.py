@@ -6,6 +6,11 @@ from scipy import optimize
 import scipy.spatial.transform as transform
 import warnings
 warnings.filterwarnings("error")
+import matplotlib.pyplot as plt
+
+def plot_vector(p, colour, ax):
+    origin = np.array([0,0,0])
+    ax.quiver(*origin, p[0], p[1], p[2], color=colour, linewidths = 3)  # 'c' for color, 'marker' for shape
 
 class Coaxial_SPM:
     def __init__(self, a1, a2, b): # gamma assumed to be zero for coaxial spm
@@ -26,6 +31,7 @@ class Coaxial_SPM:
         self.v_fpk = None
         self.actuator_origin = self.solve_ipk(np.eye(3))[0]
         self.actuator_direction = -1
+        self.angle_between_v = angle_between(self.v_origin[0], self.v_origin[1])
 
     # calculate rotation amtrix from yaw-pitch-roll input
     def R_ypr(self, angle):
@@ -72,15 +78,29 @@ class Coaxial_SPM:
         return v_ix*cos(e_i)*sin(self.a1) + v_iy*sin(e_i)*sin(self.a1) - v_iz*cos(self.a1) - cos(self.a2)
     
     # algebraically solves positional inverse kinematic problem
-    def solve_ipk(self, r, exception=True):
-        self.v = [r@self.v_origin[i] for i in self.i_range]
-        self.n = r@self.n_origin
-        A = [self.A_i_ipk(self.v[i], i) for i in self.i_range]
-        B = [self.B_i_ipk(self.v[i], i) for i in self.i_range]
-        C = [self.C_i_ipk(self.v[i], i) for i in self.i_range]
-        T = [solve_quadratic(A[i], B[i]*2, C[i])[0] for i in self.i_range] # we choose the first solution [0] because it lines up with the orientation of our manipulator
-        input_angle = np.array([cmath.atan(T[i]).real*2 for i in self.i_range])
-        self.w = [self.w_i(input_angle[i], i) for i in self.i_range] # intermediate joint unit vector
+    def solve_ipk(self, r, exception=True, overwrite=True):
+
+        temp_v = [r@self.v_origin[i] for i in self.i_range]
+        #print("v: ", self.v)
+        temp_n = r@self.n_origin
+        #print("n: ", self.n)
+        A = [self.A_i_ipk(temp_v[i], i) for i in self.i_range]
+        B = [self.B_i_ipk(temp_v[i], i) for i in self.i_range]
+        C = [self.C_i_ipk(temp_v[i], i) for i in self.i_range]
+        T = [solve_quadratic(A[i], B[i]*2, C[i])[0].real for i in self.i_range] # we choose the first solution [0] because it lines up with the orientation of our manipulator
+        #print("A: ", A)
+        #print("B: ", B)
+        #print("C: ", C)
+        #print("T: ", T)
+        input_angle = np.array([2 * np.arctan(T[i]) for i in self.i_range])
+        temp_w = [self.w_i(input_angle[i], i) for i in self.i_range] # intermediate joint unit vector
+
+        if overwrite==True:
+            self.v = temp_v
+            self.n = temp_n
+            self.w = temp_w
+        #print("w: ", self.w)
+        #print("input_angle:", input_angle)
         if self.verify_position(exception) == True:
             return input_angle
         else:
@@ -107,7 +127,7 @@ class Coaxial_SPM:
     def solve_ivk(self, platform_angle, platform_velocity):
         self.solve_ipk(platform_angle) # solve for w and v unit vectors at operting point
         # print("v\n", self.v)
-        # print("w\n", self.w)
+        #print("w\n", self.w)
         A = np.array([np.cross(self.w[i], self.v[i]).T for i in self.i_range])
         # print("A")
         # print(A)
@@ -138,14 +158,15 @@ class Coaxial_SPM:
         v2_z = v_out[8]
         # w[0][2] is w_0_y (first number is ith w vector, second number is xyz selection)
         w = self.w_fpk
+
         # angle to intermediate joint constraint
-        r[0] = w[0,0]*v0_x + w[0,1]*v0_y + w[0,2]*v0_z
-        r[1] = w[1,0]*v1_x + w[1,1]*v1_y + w[1,2]*v1_z
-        r[2] = w[2,0]*v2_x + w[2,1]*v2_y + w[2,2]*v2_z
+        r[0] = w[0,0]*v0_x + w[0,1]*v0_y + w[0,2]*v0_z - cos(self.a2)
+        r[1] = w[1,0]*v1_x + w[1,1]*v1_y + w[1,2]*v1_z - cos(self.a2)
+        r[2] = w[2,0]*v2_x + w[2,1]*v2_y + w[2,2]*v2_z - cos(self.a2)
         # vector angular constraint
-        r[3] = v0_x*v1_x + v0_y*v1_y + v0_z*v1_z - cos(2*pi/3)
-        r[4] = v1_x*v2_x + v1_y*v2_y + v1_z*v2_z - cos(2*pi/3)
-        r[5] = v2_x*v0_x + v2_y*v0_y + v2_z*v0_z - cos(2*pi/3)
+        r[3] = v0_x*v1_x + v0_y*v1_y + v0_z*v1_z - cos(self.angle_between_v)
+        r[4] = v1_x*v2_x + v1_y*v2_y + v1_z*v2_z - cos(self.angle_between_v)
+        r[5] = v2_x*v0_x + v2_y*v0_y + v2_z*v0_z - cos(self.angle_between_v)
         # unit vector magnitude constraint
         r[6] = v0_x**2 + v0_y**2 + v0_z**2 - 1
         r[7] = v1_x**2 + v1_y**2 + v1_z**2 - 1
@@ -156,26 +177,38 @@ class Coaxial_SPM:
     def solve_fpk(self, input_angles, ignore_error=False):
         # decouple yaw by subtracting first angle
         # also tirn actuator angle/velocity positive (around the up Z axis instead of the default down)
-        yaw_offset = wrap_rad(self.actuator_direction*(input_angles[0] - self.actuator_origin))
         # print("yaw_offset", yaw_offset)
-        offset_input_angles = input_angles + yaw_offset
-        init_v = [1,1,1,-1,-1,1,1,-1,1] # initial vector guess which corresponds to l-l-l configuration
         # nonlinear canonical system of equations
-        self.w_fpk = np.array([self.w_i(offset_input_angles[i], i) for i in self.i_range])
-        try:
-            v_out = optimize.fsolve(func=self.fpk_system, x0=init_v)
-            self.v_fpk = np.array([v_out[i*3:i*3+3] for i in self.i_range])
-            self.v_fpk = [R_z(yaw_offset) @ self.v_fpk[i] for i in self.i_range]
-            # print("v_fpk")
-            # print(self.v_fpk)
-            ypr = self.unwind_ypr(self.v_fpk)
-        except RuntimeWarning as warn:
-            if ignore_error == True:
-                ypr_invalid = [np.nan, np.nan, np.nan]
-                return ypr_invalid
-            else:
-                raise(warn)
-        return ypr
+        #print("input:", input_angles)
+        self.w_fpk = np.array([self.w_i(input_angles[i], i) for i in self.i_range])
+        #print('w_fpk', self.w_fpk)
+        
+        for i in range(512):
+            init_v = [1 if bit == '1' else -1 for bit in f"{i:0{9}b}"]
+            #print("init_v:", init_v)
+            try:
+                v_out = optimize.fsolve(func=self.fpk_system, x0=init_v)
+                #print("v_out:", v_out)
+                fpk_out = np.array([v_out[i*3:i*3+3] for i in self.i_range])
+                #print("fpk_out:", fpk_out)
+                # print("v_fpk")
+                # print(self.v_fpk)
+                ypr = self.unwind_ypr(fpk_out)
+                #print("iteration", i)
+                #print("ypr:", ypr)
+                check_act_angles = self.solve_ipk(self.R_ypr(ypr), overwrite=False)
+                #print("check:", check_act_angles)
+                if isclose(check_act_angles[0], input_angles[0], 1e-2) and isclose(check_act_angles[2], input_angles[2], 1e-2) and isclose(check_act_angles[2], input_angles[2], 1e-2):
+                    self.v_fpk = fpk_out
+                    return ypr
+                else:
+                    #print("no match")
+                    pass
+            except RuntimeWarning as warn:
+                #print(warn)
+                pass
+
+        return [np.nan, np.nan, np.nan]
     
     # unwinds ypr angles from three-vector (v) platform representation. Angular range is -180 <= a < 180
     def unwind_ypr(self, v):
@@ -198,12 +231,53 @@ class Coaxial_SPM:
         yaw = atan2(roll_ax[1], roll_ax[0])
         return np.array([yaw, pitch, roll])
     
+    def center_vector(self, v1, v2, v3, theta):
+        """
+        Returns the unit vector u such that v_i · u = cos(theta)
+        for 3 unit, equiangular vectors (may be coplanar).
+        """
+        v1 = np.asarray(v1, float)
+        v2 = np.asarray(v2, float)
+        v3 = np.asarray(v3, float)
+
+        M = np.column_stack([v1, v2, v3])
+        b = np.full(3, np.cos(theta))
+
+        # Try direct solve first (non-coplanar case)
+        try:
+            u = np.linalg.solve(M.T, b)
+        except np.linalg.LinAlgError:
+            # Coplanar case: find nullspace of M.T
+            _, _, VT = np.linalg.svd(M.T)
+            u = VT.T[:, -1]
+            # the given theta should be ≈ 90°, so cos(theta)=0
+            # enforce correct direction if desired
+            if np.dot(u, v1 + v2 + v3) < 0:
+                u = -u
+
+        # Normalize result
+        u /= np.linalg.norm(u)
+        return u
+    
     # get orthonormal vectors (xyz) relative to the body frame
     def get_orthonormals(self, v):
-        y_v = v[0]
-        z_v = unit_vector(np.cross(v[0], v[1]))
-        # minus puts the x axis in the positive x direction
-        x_v = -unit_vector(np.cross(z_v, y_v))
+        z_v = self.center_vector(v[0], v[1], v[2], self.angle_between_v)
+        x_v = unit_vector(np.cross(v[0], z_v))
+        y_v = unit_vector(np.cross(z_v, x_v))
+        # fig = plt.figure()
+        # ax = fig.add_subplot(111, projection='3d')
+        # plot_vector(z_v, "brown", ax)
+        # plot_vector(x_v, "purple", ax)
+        # plot_vector(y_v, "orange", ax)
+        # plot_vector(v[0], "red", ax)
+        # ax.set_xlabel('X Axis')
+        # ax.set_ylabel('Y Axis')
+        # ax.set_zlabel('Z Axis')
+        # ax.set_xlim(-1,1)
+        # ax.set_ylim(-1,1)
+        # ax.set_zlim(-1,1)
+        # ax.set_box_aspect((1, 1, 1))
+        # plt.show()
         return x_v, y_v, z_v
     
     def ypr_to_xyz_velocity(self, ypr_velocity, ypr_point):
