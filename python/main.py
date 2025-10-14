@@ -26,8 +26,8 @@ def main():
 
     # Desired angle in ypr (rad/s)
     yaw = 0
-    pitch = -0.55
-    roll = -0.55
+    pitch = 0
+    roll = 0
     ypr = np.array([wrap_rad(yaw),wrap_rad(pitch),wrap_rad(roll)])
     R_ypr = spm.R_ypr(ypr)
     print("R_ypr ", R_ypr)
@@ -53,7 +53,7 @@ def main():
 
     # verify positional kinematics with matching rotation matrices
     print("ypr:", ypr)
-    #print("fpk_ypr:", ypr_fpk)
+    print("fpk_ypr:", ypr_fpk)
     # verify Jacobian and ypr_to_xyz transformation functions with a 
     # discrete approximation based on positional kinematics
     # dt_epsilon = 1e-6 # arbitrarily small time change

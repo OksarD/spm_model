@@ -174,7 +174,7 @@ class Coaxial_SPM:
         return r
 
     # numerically solves fpk problem and returns the rotation matrix
-    def solve_fpk(self, input_angles, ignore_error=False):
+    def solve_fpk(self, input_angles, ignore_error=False, overwrite=False):
         # decouple yaw by subtracting first angle
         # also tirn actuator angle/velocity positive (around the up Z axis instead of the default down)
         # print("yaw_offset", yaw_offset)
@@ -194,9 +194,12 @@ class Coaxial_SPM:
                 # print("v_fpk")
                 # print(self.v_fpk)
                 ypr = self.unwind_ypr(fpk_out)
+                ypr[0] = wrap_rad(ypr[0])
+                ypr[1] = wrap_rad(ypr[1])
+                ypr[2] = wrap_rad(ypr[2])
                 #print("iteration", i)
                 #print("ypr:", ypr)
-                check_act_angles = self.solve_ipk(self.R_ypr(ypr), overwrite=False)
+                check_act_angles = self.solve_ipk(self.R_ypr(ypr), overwrite=overwrite, exception=False)
                 #print("check:", check_act_angles)
                 if isclose(check_act_angles[0], input_angles[0], 1e-2) and isclose(check_act_angles[2], input_angles[2], 1e-2) and isclose(check_act_angles[2], input_angles[2], 1e-2):
                     self.v_fpk = fpk_out
