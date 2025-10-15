@@ -30,6 +30,7 @@ private:
     bool halted;
     uint8_t reg_max;
     NRF_TIMER_Type* timer;
+    float speed_scale;
 
     void set_dir(bool dir);
     void step();
@@ -42,7 +43,7 @@ private:
 class StepperDriver {
 public:
     friend class StepperMotor;
-    StepperDriver(NRF_TIMER_Type* _timer, IRQn_Type _irq, uint8_t _reg_max);
+    StepperDriver(NRF_TIMER_Type* _timer, IRQn_Type _irq, uint8_t _reg_max, uint8_t _prescaler);
 
     void begin();
     void add_motor(StepperMotor& m);
@@ -54,5 +55,7 @@ private:
     IRQn_Type irq;
     uint8_t motorCount;
     vector<StepperMotor*> motors; // reserve the last register for capture
+    float speed_scale;
+    uint8_t prescaler;
 
 };

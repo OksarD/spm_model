@@ -21,7 +21,7 @@ void StepperMotor::setSpeed(float speed) {
             disable_interrupt(ccIndex);
         }
     } else {
-        intervalTicks = floor(abs(1e6/speed)); // prevent divide by zero
+        intervalTicks = floor(abs(speed_scale/speed)); // prevent divide by zero
         if (halted) {
             // reinitialise CC to the next tick interval
             timer->CC[ccIndex] = timer_current() + intervalTicks;
@@ -72,15 +72,16 @@ void StepperMotor::step() {
     timer->CC[ccIndex] += intervalTicks;
 }
 
-StepperDriver::StepperDriver(NRF_TIMER_Type* _timer, IRQn_Type _irq, uint8_t _reg_max)
-    : timer(_timer), irq(_irq), motorCount(0), reg_max(_reg_max) {}
+StepperDriver::StepperDriver(NRF_TIMER_Type* _timer, IRQn_Type _irq, uint8_t _reg_max, uint8_t _prescaler)
+    : timer(_timer), irq(_irq), motorCount(0), reg_max(_reg_max), 
+    prescaler(_prescaler), speed_scale(pow(2,(4-_prescaler))*1e6) {}
 
 void StepperDriver::begin() {
     timer->TASKS_STOP  = 1;  // just in case it's running
     timer->TASKS_CLEAR = 1;
     timer->BITMODE = 3UL; // 32 bit
     timer->MODE = 0UL;    // timer, not counter
-    timer->PRESCALER = 4UL; // freq = 16Mhz / 2^prescaler = 1Mhz 
+    timer->PRESCALER = prescaler; // freq = 16Mhz / 2^prescaler = 1Mhz 
     timer->INTENSET = 0; // NRF_RTC_INT_COMPARE0_MASK | NRF_RTC_INT_COMPARE1_MASK | NRF_RTC_INT_COMPARE2_MASK;
     NVIC_EnableIRQ(irq);
     timer->TASKS_START = 1;
@@ -96,6 +97,7 @@ void StepperDriver::add_motor(StepperMotor& m) {
     m.timer = timer;
     m.reg_max = reg_max;
     timer->CC[m.ccIndex] = 0;
+    m.speed_scale = speed_scale;
 }
 
 void StepperDriver::irq_handler() {

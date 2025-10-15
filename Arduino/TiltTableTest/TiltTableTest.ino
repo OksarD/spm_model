@@ -19,7 +19,7 @@ Coaxial_SPM spm(a1, a2, b);
 
 // Stepper motors should be arranged around the Z axis (anti-clockwise from birds-eye view),
 // starting with the motor connected to the +Y platform axis
-StepperDriver driver(NRF_TIMER4, TIMER4_IRQn, 6);
+StepperDriver driver(NRF_TIMER4, TIMER4_IRQn, 6, 6);
 StepperMotor stepper_0(STEP_1, DIR_1, SLEEP_1);
 StepperMotor stepper_1(STEP_2, DIR_2, SLEEP_2);
 StepperMotor stepper_2(STEP_3, DIR_3, SLEEP_3);

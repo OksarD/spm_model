@@ -5,7 +5,7 @@ from generator import pathGenerator, trajectory, loopTimer
 import threading
 
 # Script Config
-PLOT_TRAJECTORY = False
+PLOT_TRAJECTORY = True
 
 SAMPLE_FREQUENCY = 50 # Hz
 FILTER_FREQUENCY = 10 # Hz
@@ -222,6 +222,13 @@ def main():
                         traj_y = generator.generate_triangle_trajectory(radians(45),4,test_duration, filter=True)
                         traj_p = generator.generate_triangle_trajectory(radians(30),4,test_duration, filter=True)
                         traj_r = generator.generate_triangle_trajectory(radians(30),4,test_duration, filter=True)
+                        open_loop_test(traj_y, traj_p, traj_r)
+                    
+                    if line == "OPRS":
+                        test_duration = 20
+                        traj_y = generator.generate_zero_trajectory(test_duration)
+                        traj_p = generator.generate_sin_trajectory(radians(20),4,test_duration, filter=True)
+                        traj_r = generator.generate_cos_trajectory(radians(20),4,test_duration, filter=True)
                         open_loop_test(traj_y, traj_p, traj_r)
     
         time.sleep(0.01)

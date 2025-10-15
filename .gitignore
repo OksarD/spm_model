@@ -13,3 +13,9 @@ python/ypr_table.npy
 Arduino/TiltTableTest/SparkFunLSM6DSO.cpp
 
 Arduino/TiltTableTest/SparkFunLSM6DSO.h
+
+python/fpk_table_data/pitch_table_formatted.txt
+
+python/fpk_table_data/roll_table_formatted.txt
+
+python/fpk_table_data/yaw_table_formatted.txt

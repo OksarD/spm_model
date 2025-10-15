@@ -327,15 +327,21 @@ void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref) {
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_velocity_ref, ypr_ref);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
   set_actuator_velocity(actuator_velocity);
-  #ifdef DEBUG
-  Vector3f est_ypr = q_to_ypr(estimate());
+  #ifdef INFO
+  //Vector3f est_ypr = q_to_ypr(estimate());
   Serial.print(loop_time_elapsed);
+  // Serial.print(",");
+  // Serial.print(est_ypr[0], 6);
+  // Serial.print(",");
+  // Serial.print(est_ypr[1], 6);
+  // Serial.print(",");
+  // Serial.print(est_ypr[2], 6);
   Serial.print(",");
-  Serial.print(est_ypr[0], 6);
+  Serial.print(actuator_velocity[0], 3);
   Serial.print(",");
-  Serial.print(est_ypr[1], 6);
+  Serial.print(actuator_velocity[1], 3);
   Serial.print(",");
-  Serial.print(est_ypr[2], 6);
+  Serial.print(actuator_velocity[2], 3);
   Serial.println();
   #endif
 }
