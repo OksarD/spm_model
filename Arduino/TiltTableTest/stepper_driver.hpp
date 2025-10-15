@@ -31,6 +31,7 @@ private:
     uint8_t reg_max;
     NRF_TIMER_Type* timer;
     float speed_scale;
+    uint32_t prev_cc;
 
     void set_dir(bool dir);
     void step();

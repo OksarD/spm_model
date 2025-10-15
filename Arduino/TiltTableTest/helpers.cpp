@@ -194,13 +194,13 @@ Vector3f gyro_xyz(unsigned int samples) {
 }
 
 Quaternionf estimate(bool include_yaw_fpk) {
-  Vector3f ypr_meas = accel_ypr();
+  Vector3f ypr_meas = accel_ypr(1);
   if (include_yaw_fpk) { 
     ypr_meas[0] = interp_yaw_fpk();
   }
   Quaternionf q_meas = ypr_to_q(ypr_meas);
   Vector3f gyro = gyro_xyz() - gyro_bias;
-  kalman.F = gyro_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
+  kalman.F = xyz_velocity_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
   kalman.predict();
   #ifdef TRACE
   Serial.print("0, ");
@@ -234,6 +234,7 @@ Quaternionf estimate(bool include_yaw_fpk) {
   #endif
   kalman.correct(Vector4f(q_meas.w(),q_meas.x(), q_meas.y(), q_meas.z()));
   kalman.x /= kalman.x.norm();
+  Quaternionf est = Quaternionf(kalman.x[0], kalman.x[1], kalman.x[2], kalman.x[3]);
   #ifdef TRACE
   Serial.print(", 4, ");
   Serial.print(kalman.state()[0], 3);
@@ -245,13 +246,41 @@ Quaternionf estimate(bool include_yaw_fpk) {
   Serial.print(kalman.state()[3], 3);
   Serial.println();
   #endif
-  return Quaternionf(kalman.x[0], kalman.x[1], kalman.x[2], kalman.x[3]);
+  #ifdef INFO
+  // evaluate kalman filter with these prints
+  // second kalman filter to only predict to evaluate accumulated error
+  kalman_predict.F = xyz_velocity_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
+  kalman_predict.predict();
+  Vector3f pred = q_to_ypr(Quaternionf(kalman_predict.x[0], kalman_predict.x[1], kalman_predict.x[2], kalman_predict.x[3])); // predict step for debugging
+  Vector3f est_ypr = q_to_ypr(est);
+  Serial.print(loop_time_elapsed);
+  Serial.print(",");
+  Serial.print(est_ypr[0], 4);
+  Serial.print(",");
+  Serial.print(est_ypr[1], 4);
+  Serial.print(",");
+  Serial.print(est_ypr[2], 4);
+  Serial.print(",");
+  Serial.print(ypr_meas[0], 4);
+  Serial.print(",");
+  Serial.print(ypr_meas[1], 4);
+  Serial.print(",");
+  Serial.print(ypr_meas[2], 4);
+  Serial.print(",");
+  Serial.print(pred[0], 4);
+  Serial.print(",");
+  Serial.print(pred[1], 4);
+  Serial.print(",");
+  Serial.print(pred[2], 4);
+  Serial.println();
+  #endif
+  return est;
 }
 
 float interp_yaw_fpk() {
   Vector3f act_pos = actuator_position();
-  float offset = spm.actuator_direction*(act_pos[0] - spm.actuator_origin);
-  Vector3f actuator_offset = act_pos + Vector3f::Constant(offset); // offset the actuator position such that m0 is placed at the origin
+  float offset = act_pos[0] - spm.actuator_origin;
+  Vector3f actuator_offset = act_pos - Vector3f::Constant(offset); // offset the actuator position such that m0 is placed at the origin
   float yaw_offset = fpk_yaw_table.interp(actuator_offset[1], actuator_offset[2]); // fpk table is in the m1/m2 domain
   if (yaw_offset < -2*PI || yaw_offset > 2*PI) { // if yaw value drastically out-of-bounds (NAN)
     disable_motors();
@@ -328,21 +357,7 @@ void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref) {
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
   set_actuator_velocity(actuator_velocity);
   #ifdef INFO
-  //Vector3f est_ypr = q_to_ypr(estimate());
-  Serial.print(loop_time_elapsed);
-  // Serial.print(",");
-  // Serial.print(est_ypr[0], 6);
-  // Serial.print(",");
-  // Serial.print(est_ypr[1], 6);
-  // Serial.print(",");
-  // Serial.print(est_ypr[2], 6);
-  Serial.print(",");
-  Serial.print(actuator_velocity[0], 3);
-  Serial.print(",");
-  Serial.print(actuator_velocity[1], 3);
-  Serial.print(",");
-  Serial.print(actuator_velocity[2], 3);
-  Serial.println();
+  estimate();
   #endif
 }
 

@@ -25,9 +25,9 @@ def main():
     ax = fig.add_subplot(111, projection='3d')
 
     # Desired angle in ypr (rad/s)
-    yaw = 0
-    pitch = 0
-    roll = 0
+    yaw = -20
+    pitch = -0.4
+    roll = 0.3
     ypr = np.array([wrap_rad(yaw),wrap_rad(pitch),wrap_rad(roll)])
     R_ypr = spm.R_ypr(ypr)
     print("R_ypr ", R_ypr)

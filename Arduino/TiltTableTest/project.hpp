@@ -88,6 +88,7 @@ extern unsigned long loop_time_proc;
 extern LSM6DSO platformIMU;
 extern Vector3f gyro_bias;
 extern KalmanFilter<float, 4, 4> kalman;
+extern KalmanFilter<float, 4, 4> kalman_predict;
 
 // Lookup table
 #ifdef FPK_YAW_LOOKUP_TABLE

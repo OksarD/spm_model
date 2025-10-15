@@ -156,9 +156,9 @@ else:
     ypr_table = np.load(os.path.join(DATA_FOLDER, FILENAME_TABLE))
 
 if POST_PROCESS_TABLE:
-    yaw_table = keep_center_region(remove_local_outliers(ypr_table[:,:,0]))
-    pitch_table = keep_center_region(remove_local_outliers(ypr_table[:,:,1]))
-    roll_table = keep_center_region(remove_local_outliers(ypr_table[:,:,2]))
+    yaw_table = keep_center_region(remove_local_outliers(ypr_table[:,:,0]), True)
+    pitch_table = keep_center_region(remove_local_outliers(ypr_table[:,:,1]), True)
+    roll_table = keep_center_region(remove_local_outliers(ypr_table[:,:,2]), True)
 else:
     yaw_table = ypr_table[:,:,0]
     pitch_table = ypr_table[:,:,1]

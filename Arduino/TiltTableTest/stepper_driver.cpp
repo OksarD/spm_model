@@ -15,18 +15,29 @@ StepperMotor::StepperMotor(uint8_t _stepPin, uint8_t _dirPin, uint8_t _sleepPin)
     }
 
 void StepperMotor::setSpeed(float speed) {
-    if (speed == 0) {
-        if (!halted) { // set flag when speed is zero
+    if (abs(speed) < 1e-5) { 
+        if (!halted) { // set flag when speed is close to zero
             halted = true; 
-            disable_interrupt(ccIndex);
+            timer->CC[ccIndex] = timer_current() - 1; // set compare reg behind timer so it takes max time to step
         }
     } else {
-        intervalTicks = floor(abs(speed_scale/speed)); // prevent divide by zero
+        intervalTicks = round(abs(speed_scale/speed));
         if (halted) {
-            // reinitialise CC to the next tick interval
-            timer->CC[ccIndex] = timer_current() + intervalTicks;
-            enable_interrupt(ccIndex);
             halted = false;
+            prev_cc = timer->CC[ccIndex];
+            timer->CC[ccIndex] = timer_current() + 1; // initialise CC so the interupt fires on the next tick
+        } else {
+            // if the new speed value is slow enough to be set immediately, then set the corresponding cc value,
+            // if it is too fast, set the cc to the next tick
+            uint32_t new_cc = prev_cc + intervalTicks;
+            uint32_t current_cc = timer_current();
+            if (new_cc > current_cc) {
+                prev_cc = timer->CC[ccIndex];
+                timer->CC[ccIndex] = new_cc;
+            } else {
+                prev_cc = timer->CC[ccIndex];
+                timer->CC[ccIndex] = current_cc + 1;
+            }
         }
         // set direction
         if (speed < 0) { set_dir(false); }
@@ -36,10 +47,14 @@ void StepperMotor::setSpeed(float speed) {
 
 void StepperMotor::enable() {
     digitalWrite(sleepPin, HIGH);
+    enable_interrupt(ccIndex);
+    timer->CC[ccIndex] = timer_current() - 1;
+    halted = true;
 }
 
 void StepperMotor::disable() {
     digitalWrite(sleepPin, LOW);
+    disable_interrupt(ccIndex);
 }
 
 void StepperMotor::debug_print() {
@@ -69,6 +84,7 @@ void StepperMotor::step() {
     digitalWrite(stepPin, step_state);
     if (direction) position++;
     else position--;
+    prev_cc = timer->CC[ccIndex];
     timer->CC[ccIndex] += intervalTicks;
 }
 

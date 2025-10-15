@@ -19,7 +19,7 @@ Coaxial_SPM spm(a1, a2, b);
 
 // Stepper motors should be arranged around the Z axis (anti-clockwise from birds-eye view),
 // starting with the motor connected to the +Y platform axis
-StepperDriver driver(NRF_TIMER4, TIMER4_IRQn, 6, 6);
+StepperDriver driver(NRF_TIMER4, TIMER4_IRQn, 6, 7);
 StepperMotor stepper_0(STEP_1, DIR_1, SLEEP_1);
 StepperMotor stepper_1(STEP_2, DIR_2, SLEEP_2);
 StepperMotor stepper_2(STEP_3, DIR_3, SLEEP_3);
@@ -38,7 +38,7 @@ LSM6DSO platformIMU;
 Vector3f gyro_bias(0, 0, 0);
 
 // Kalman Filter
-Matrix4f Q = 1e-2 * Matrix4f::Identity();
+Matrix4f Q = 1e-4 * Matrix4f::Identity();
 Matrix4f R = 1 * Matrix4f::Identity();
 Vector3f origin(0.0f, 0.0f, 0.0f);
 Quaternionf x0_q = ypr_to_q(origin);
@@ -48,7 +48,7 @@ Matrix4f F0 = Matrix4f::Identity();
 Matrix4f H = Matrix4f::Identity();
 
 KalmanFilter<float, 4, 4> kalman(x0, P0, F0, H, Q, R);
-
+KalmanFilter<float, 4, 4> kalman_predict(x0, P0, F0, H, Q, R);
 // Lookup Table forward-kinematics
 float fpk_xy0 = spm.actuator_origin - PI;  // table is centered around actuator origin, and extends to +/- pi
 float fpk_dxy = 2 * PI / LOOKUP_TABLE_DIM;
@@ -56,7 +56,7 @@ LookupTable2D fpk_yaw_table(fpk_xy0, fpk_xy0, fpk_dxy, fpk_dxy,
                             LOOKUP_TABLE_DIM, LOOKUP_TABLE_DIM, yaw_table);
 
 // controller
-PID position_compensator(2, 0, 0, 0.04, 1);
+PID position_compensator(2.5, 0, 0, 0.05, 1);
 
 void setup() {
   Serial.begin(115200);
@@ -161,7 +161,8 @@ void loop() {
 #endif
             delay(500); // let robot settle
             gyro_bias = gyro_xyz(200);                                // average a lot of samples to accurately measure drift
-            kalman = KalmanFilter<float, 4, 4>(x0, P0, F0, H, Q, R);  // reset kalman filter
+            kalman = KalmanFilter<float, 4, 4>(x0, P0, F0, H, Q, R);
+            kalman_predict = KalmanFilter<float, 4, 4>(x0, P0, F0, H, Q, R);  // reset kalman filter
             Quaternionf est;
             for (uint32_t i=0; i<SETTLE_UPDATES; i++) { // let kalman filter converge
               est = estimate(false);

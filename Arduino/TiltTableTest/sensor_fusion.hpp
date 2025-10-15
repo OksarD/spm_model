@@ -11,7 +11,7 @@ using namespace Eigen;
 
 // Kalman filter class and related functions
 
-Matrix4f gyro_transition_matrix(Vector3f& gyro_xyz, float dt);
+Matrix4f xyz_velocity_transition_matrix(Vector3f& gyro_xyz, float dt);
 
 template <typename T, int N, int M>
 class KalmanFilter {
@@ -75,6 +75,8 @@ Matrix<T, N, 1>& KalmanFilter<T, N, M>::state() {
     return x; 
 }
 
+// forward-kinematic lookup table class
+
 class LookupTable2D {
 public:
     LookupTable2D(float x0, float y0, float dx, float dy,
@@ -116,7 +118,7 @@ public:
 
 private:
     inline float at(size_t i, size_t j) const {
-        return data_[j * nx_ + i];  // Row-major
+        return data_[i * nx_ + j];  // Row-major
     }
 
     const float* data_;
