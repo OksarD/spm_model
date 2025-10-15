@@ -7,14 +7,19 @@ from utils import *
 from datetime import datetime
 from scipy.interpolate import RegularGridInterpolator
 from mpl_toolkits.mplot3d import Axes3D
-from scipy.interpolate import griddata
+from scipy.ndimage import median_filter
+from scipy.ndimage import label, binary_fill_holes
+import os
 
 np.set_printoptions(formatter={'float': '{:.3f}'.format})
 
 # config
 SAVE_TABLE = False
 PLOT_TABLE = True
-LOAD_TABLE = False
+LOAD_TABLE = True
+POST_PROCESS_TABLE = True
+
+DATA_FOLDER = "fpk_table_data"
 FILENAME_TABLE = "ypr_table.npy"
 FILENAME_TABLE_TXT = "table_formatted.txt"
 
@@ -29,7 +34,7 @@ spm = manipulator.Coaxial_SPM(a1, a2, b)
 SLOPE_LIMIT = radians(45)
 
 # Table Params
-TABLE_DIM = 15
+TABLE_DIM = 180
 NAN_CODE = -999
 
 class sample_point:
@@ -48,6 +53,85 @@ def format_table(arr):
                     f_table_str += "{:.6f}, ".format(float(point))
         f_table_str += "\n"
     return f_table_str
+
+def remove_local_outliers(data, window=3, threshold=2):
+    data = data.copy()
+    local_med = median_filter(data, size=window, mode='reflect')
+    abs_dev = np.abs(data - local_med)
+    mad = median_filter(abs_dev, size=window, mode='reflect')
+
+    mask = abs_dev > threshold * mad
+    data[mask] = local_med[mask]
+    return data
+
+def keep_center_region(surface, jump_threshold=0.2, connectivity=4, fill_holes=False):
+    """
+    Keeps only the continuous region around the center of the surface,
+    where continuity is defined by both:
+      - no NaNs
+      - no value jumps above jump_threshold between adjacent cells.
+    
+    Parameters
+    ----------
+    surface : np.ndarray
+        2D array (surface map)
+    jump_threshold : float
+        Maximum allowed difference between adjacent cells to be considered connected.
+    connectivity : int
+        4 or 8 — defines how diagonals are treated as connected.
+    fill_holes : bool
+        Fill small NaN holes inside the main region.
+    """
+    data = surface.copy()
+    valid = ~np.isnan(data)
+
+    # Step 1: Build connectivity mask that breaks where jumps exceed threshold
+    mask = valid.copy()
+
+    # Compare with 4 or 8 neighbours
+    dy = [0, 1, -1, 0]
+    dx = [1, 0, 0, -1]
+    if connectivity == 8:
+        dy += [1, 1, -1, -1]
+        dx += [1, -1, 1, -1]
+
+    for y_shift, x_shift in zip(dy, dx):
+        shifted = np.roll(data, shift=(y_shift, x_shift), axis=(0,1))
+        diff = np.abs(data - shifted)
+        broken = diff > jump_threshold
+        broken |= np.isnan(diff)
+        # mark both sides of large jumps as invalid connections
+        mask[broken & valid] = False
+
+    # Step 2: Label connected regions of remaining mask
+    structure = np.ones((3,3)) if connectivity == 8 else np.array([[0,1,0],[1,1,1],[0,1,0]])
+    labeled, n = label(mask, structure=structure)
+
+    if n == 0:
+        return data
+
+    # Step 3: Keep the patch that includes the center pixel
+    center = (data.shape[0]//2, data.shape[1]//2)
+    center_label = labeled[center]
+
+    if center_label == 0:
+        # Center might be NaN or isolated; pick nearest valid region
+        ys, xs = np.nonzero(labeled)
+        if len(ys) == 0:
+            return data
+        dist = (ys-center[0])**2 + (xs-center[1])**2
+        nearest = np.argmin(dist)
+        center_label = labeled[ys[nearest], xs[nearest]]
+
+    keep_mask = labeled == center_label
+
+    # Step 4: Optionally fill internal NaN holes
+    if fill_holes:
+        keep_mask = binary_fill_holes(keep_mask)
+
+    # Step 5: Mask out everything else
+    data[~keep_mask] = np.nan
+    return data
 
 # Main Functions
 
@@ -69,38 +153,49 @@ if LOAD_TABLE == False:
     print("\nDone.")
 else:
     print("Loading Saved Table...")
-    ypr_table = np.load(FILENAME_TABLE)
+    ypr_table = np.load(os.path.join(DATA_FOLDER, FILENAME_TABLE))
+
+if POST_PROCESS_TABLE:
+    yaw_table = keep_center_region(remove_local_outliers(ypr_table[:,:,0]))
+    pitch_table = keep_center_region(remove_local_outliers(ypr_table[:,:,1]))
+    roll_table = keep_center_region(remove_local_outliers(ypr_table[:,:,2]))
+else:
+    yaw_table = ypr_table[:,:,0]
+    pitch_table = ypr_table[:,:,1]
+    roll_table = ypr_table[:,:,2]
 
 if PLOT_TABLE:
     # Yaw
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
     M1_AX, M2_AX = np.meshgrid(act_lin, act_lin, indexing="ij")
-    ax.plot_surface(M1_AX, M2_AX, ypr_table[:,:,0], cmap="viridis")
+    ax.plot_surface(M1_AX, M2_AX, yaw_table, cmap="viridis")
     ax.set_xlabel("M1 axis")
     ax.set_ylabel("M2 axis")
     ax.set_zlabel("Yaw value")
     # Pitch
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
-    ax.plot_surface(M1_AX, M2_AX, ypr_table[:,:,1], cmap="viridis")
-    ax.plot_surface(M1_AX, M2_AX, ypr_table[:,:,2], cmap="plasma")
+    ax.plot_surface(M1_AX, M2_AX, pitch_table, cmap="viridis")
+    ax.plot_surface(M1_AX, M2_AX, roll_table, cmap="plasma")
     ax.set_xlabel("M1 axis")
     ax.set_ylabel("M2 axis")
     ax.set_zlabel("Pitch/Roll value")
     plt.show()
 
 if SAVE_TABLE:
-    np.save(FILENAME_TABLE, ypr_table)
-    print("Written table to", FILENAME_TABLE)
+    if not LOAD_TABLE:
+        np.save(os.path.join(DATA_FOLDER, FILENAME_TABLE), ypr_table)
+        print("Written table to", FILENAME_TABLE)
     # format only the yaw component of the table and save it as text for copying
-    yaw_table_formatted = format_table(ypr_table[:,:,0])  
-    pitch_table_formatted = format_table(ypr_table[:,:,1]) 
-    roll_table_formatted = format_table(ypr_table[:,:,2])
-    with open("yaw_" + FILENAME_TABLE_TXT, "w") as f:
+    yaw_table_formatted = format_table(yaw_table)  
+    pitch_table_formatted = format_table(pitch_table) 
+    roll_table_formatted = format_table(roll_table)
+
+    with open(DATA_FOLDER + "/yaw_" + FILENAME_TABLE_TXT, "w") as f:
         f.write(yaw_table_formatted)
-    with open("pitch_" + FILENAME_TABLE_TXT, "w") as f:
+    with open(DATA_FOLDER + "/pitch_" + FILENAME_TABLE_TXT, "w") as f:
         f.write(pitch_table_formatted) 
-    with open("roll_" + FILENAME_TABLE_TXT, "w") as f:
+    with open(DATA_FOLDER + "/roll_" + FILENAME_TABLE_TXT, "w") as f:
         f.write(roll_table_formatted) 
     print("Formatted as txt and written to yaw/pitch/roll_" + FILENAME_TABLE_TXT)
