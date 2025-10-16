@@ -251,6 +251,8 @@ Quaternionf estimate(bool include_yaw_fpk) {
   // second kalman filter to only predict to evaluate accumulated error
   kalman_predict.F = xyz_velocity_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
   kalman_predict.predict();
+  kalman_predict.x /= kalman_predict.x.norm();
+  if (state == POSITION_STATE) { kalman_predict.correct(Vector4f(q_meas.w(),q_meas.x(), q_meas.y(), q_meas.z())); }
   Vector3f pred = q_to_ypr(Quaternionf(kalman_predict.x[0], kalman_predict.x[1], kalman_predict.x[2], kalman_predict.x[3])); // predict step for debugging
   Vector3f est_ypr = q_to_ypr(est);
   Serial.print(loop_time_elapsed);
@@ -278,17 +280,20 @@ Quaternionf estimate(bool include_yaw_fpk) {
 }
 
 float interp_yaw_fpk() {
+  static float prev_yaw_offset;
   Vector3f act_pos = actuator_position();
-  float offset = act_pos[0] - spm.actuator_origin;
-  Vector3f actuator_offset = act_pos - Vector3f::Constant(offset); // offset the actuator position such that m0 is placed at the origin
+  float offset = - act_pos[0] + spm.actuator_origin;
+  Vector3f actuator_offset = act_pos + Vector3f::Constant(offset); // offset the actuator position such that m0 is placed at the origin
   float yaw_offset = fpk_yaw_table.interp(actuator_offset[1], actuator_offset[2]); // fpk table is in the m1/m2 domain
   if (yaw_offset < -2*PI || yaw_offset > 2*PI) { // if yaw value drastically out-of-bounds (NAN)
-    disable_motors();
-    next_state = IDLE_STATE;
+    //disable_motors();
+    //next_state = IDLE_STATE;
     Serial.println("Platform Out of Bounds! Ensure that position commands have less than a 40 degree slope.");
-    return FPK_NAN_CODE;
+    return prev_yaw_offset + offset;
+  } else {
+    prev_yaw_offset = yaw_offset;
   }
-  #ifdef TRACE
+  #ifdef DEBUG
   Serial.print("act_pos: ");
   Serial.print(act_pos[0], 3);
   Serial.print(", ");

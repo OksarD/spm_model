@@ -116,10 +116,10 @@ public:
              + f11 * tx       * ty;
     }
 
-private:
     inline float at(size_t i, size_t j) const {
-        return data_[i * nx_ + j];  // Row-major
+        return data_[i * ny_ + j];  // Column-major
     }
+private:
 
     const float* data_;
     float x0_, y0_;

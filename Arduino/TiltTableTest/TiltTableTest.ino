@@ -56,7 +56,7 @@ LookupTable2D fpk_yaw_table(fpk_xy0, fpk_xy0, fpk_dxy, fpk_dxy,
                             LOOKUP_TABLE_DIM, LOOKUP_TABLE_DIM, yaw_table);
 
 // controller
-PID position_compensator(2.5, 0, 0, 0.05, 1);
+PID position_compensator(2, 0, 0, 0.1, 1);
 
 void setup() {
   Serial.begin(115200);
@@ -317,13 +317,13 @@ void loop() {
           static bool print_gyro = false;
           static bool print_kalman = false;
 
-          if (hasChar(command, '0')) {
+          if (hasChar(command, ')')) { // shift+0
             test_motor(stepper_0, 0);
           }
-          if (hasChar(command, '1')) {
+          if (hasChar(command, '!')) { // shift+1
             test_motor(stepper_1, 1);
           }
-          if (hasChar(command, '2')) {
+          if (hasChar(command, '@')) { // shift+2
             test_motor(stepper_2, 2);
           }
           if (hasChar(command, 'A')) {
@@ -334,6 +334,30 @@ void loop() {
           }
           if (hasChar(command, 'K')) {
             print_kalman = !print_kalman;
+          }
+          if (hasChar(command, 'F')) {
+            // test actuator values for fpk table
+            float fpk_yaw = interp_yaw_fpk();
+            Serial.print("act_pos: ");
+            Serial.print(actuator_position()[0]);
+            Serial.print(", ");
+            Serial.print(actuator_position()[1]);
+            Serial.print(", ");
+            Serial.print(actuator_position()[2]);
+            Serial.print("\nfpk_yaw test ");
+            Serial.println(fpk_yaw, 3);
+          }
+          if (hasChar(command, 'f')) {
+            uint32_t i = uint32_t(ExtractValue(command, 'f'));
+            uint32_t j = uint32_t(ExtractValue(command, ','));
+            // test actuator values for fpk table
+            float fpk_yaw = fpk_yaw_table.at(i,j);
+            Serial.print("i, j: ");
+            Serial.print(i);
+            Serial.print(", ");
+            Serial.print(j);
+            Serial.print("\nfpk_yaw test (index) ");
+            Serial.println(fpk_yaw, 3);
           }
 
           // Printing

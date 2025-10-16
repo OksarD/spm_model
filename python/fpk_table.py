@@ -10,12 +10,13 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.ndimage import median_filter
 from scipy.ndimage import label, binary_fill_holes
 import os
+from scipy.interpolate import interp2d
 
 np.set_printoptions(formatter={'float': '{:.3f}'.format})
 
 # config
 SAVE_TABLE = False
-PLOT_TABLE = True
+PLOT_TABLE = False
 LOAD_TABLE = True
 POST_PROCESS_TABLE = True
 
@@ -163,6 +164,30 @@ else:
     yaw_table = ypr_table[:,:,0]
     pitch_table = ypr_table[:,:,1]
     roll_table = ypr_table[:,:,2]
+
+
+
+y = RegularGridInterpolator((act_lin, act_lin), yaw_table)
+p = RegularGridInterpolator((act_lin, act_lin), pitch_table)
+r = RegularGridInterpolator((act_lin, act_lin), roll_table)
+
+# test table
+pt = [0.7, -0.4]
+pt[0] = pt[0]+spm.actuator_origin
+pt[1] = pt[1]+spm.actuator_origin
+ypr = [y(pt), p(pt), r(pt)]
+ypr_real = spm.solve_fpk([wrap_rad(spm.actuator_origin), wrap_rad(pt[0]), wrap_rad(pt[1])])
+print("pt m1_m2", pt)
+print("ypr fpk table: ", ypr)
+print("ypr fpk real:", ypr_real)
+
+# test table by index
+i = 40
+j = 90
+ypr_ind = [yaw_table[i,j], pitch_table[i,j], roll_table[i,j]]
+print("ij: ", i, j )
+print("ypr fpk table indexed: ", ypr_ind)
+
 
 if PLOT_TABLE:
     # Yaw

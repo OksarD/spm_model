@@ -25,9 +25,9 @@ def main():
     ax = fig.add_subplot(111, projection='3d')
 
     # Desired angle in ypr (rad/s)
-    yaw = -20
-    pitch = -0.4
-    roll = 0.3
+    yaw = 0
+    pitch = 0
+    roll = -0.75
     ypr = np.array([wrap_rad(yaw),wrap_rad(pitch),wrap_rad(roll)])
     R_ypr = spm.R_ypr(ypr)
     print("R_ypr ", R_ypr)
@@ -43,7 +43,12 @@ def main():
     # solve kinematics
     print("angle_between:", spm.angle_between_v)
     print("act_origin:", spm.actuator_origin)
-    actuator_angles = spm.solve_ipk(R_ypr)
+
+    #actuator_angles = spm.solve_ipk(R_ypr)
+    actuator_angles = [-1.36, -1.36, 0.23]
+    actuator_angles[0] = wrap_rad(actuator_angles[0])
+    actuator_angles[1] = wrap_rad(actuator_angles[1])
+    actuator_angles[2] = wrap_rad(actuator_angles[2])
     up = np.array([0,0,1])
     slope = angle_between(up, spm.n)
     print("slope (deg)", degrees(slope))
@@ -76,8 +81,8 @@ def main():
         # print("Joint %i" % i)
         # print("Actuator angle: %.2f" % (actuator_angles[i]))
         # print("Actuator velocity: %.2f" % (actuator_velocity[i]))
-        plot_vector(spm.v[i], v_colours[i], ax)
-        plot_vector(spm.w[i], w_colours[i], ax)
+        # plot_vector(spm.v[i], v_colours[i], ax)
+        # plot_vector(spm.w[i], w_colours[i], ax)
         plot_vector(spm.v_fpk[i], fpk_v_colours[i], ax)
 
     # plot graph
