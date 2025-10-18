@@ -5,7 +5,7 @@ from generator import pathGenerator, trajectory, loopTimer
 import threading
 
 # Script Config
-PLOT_TRAJECTORY = True
+PLOT_TRAJECTORY = False
 
 SAMPLE_FREQUENCY = 50 # Hz
 FILTER_FREQUENCY = 10 # Hz
@@ -174,7 +174,7 @@ def main():
                 else:
                 # commands to run scripts
                     
-                    if line == "OYT": # yaw-pitch synchronous triangle
+                    if line == "OYT": # yaw triangle
                         # period of 4 so that it spends 2 seconds per stride, therefore travels at the speed of the amplitude
                         test_duration = 20
                         traj_y = generator.generate_triangle_trajectory(radians(45),4,test_duration, filter=True)
@@ -211,7 +211,7 @@ def main():
                         traj_r = generator.generate_triangle_trajectory(radians(30),4,test_duration, filter=True)
                         open_loop_test(traj_y, traj_p, traj_r)
                     
-                    if line == "OYS": # yaw-pitch off-sync sinusoid
+                    if line == "OYS": # yaw sinusoid
                         test_duration = 20
                         traj_y = generator.generate_sin_trajectory(radians(45),4,test_duration, filter=True)
                         traj_p = generator.generate_zero_trajectory(test_duration)

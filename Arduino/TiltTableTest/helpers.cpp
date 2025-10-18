@@ -117,9 +117,9 @@ void reset_actuator_position() {
 }
 
 Vector3f actuator_position() {
-  Vector3f pos(motor_to_actuator_position(stepper_0.position),
-          motor_to_actuator_position(stepper_1.position),
-          motor_to_actuator_position(stepper_2.position)
+  Vector3f pos(motor_to_actuator_position(static_cast<long>(stepper_0.position)),
+          motor_to_actuator_position(static_cast<long>(stepper_1.position)),
+          motor_to_actuator_position(static_cast<long>(stepper_2.position))
   );
   return pos;
 }
@@ -200,38 +200,25 @@ Quaternionf estimate(bool include_yaw_fpk) {
   }
   Quaternionf q_meas = ypr_to_q(ypr_meas);
   Vector3f gyro = gyro_xyz() - gyro_bias;
+
   kalman.F = xyz_velocity_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
   kalman.predict();
-  #ifdef TRACE
-  Serial.print("0, ");
-  Serial.print(gyro[0]);
-  Serial.print(", ");
-  Serial.print(gyro[1]);
-  Serial.print(", ");
-  Serial.print(gyro[2]);
-  Serial.print(", 1, ");
-  Serial.print(ypr_meas[0]);
-  Serial.print(", ");
-  Serial.print(ypr_meas[1]);
-  Serial.print(", ");
-  Serial.print(ypr_meas[2]);
-  Serial.print(", 2, ");
-  Serial.print(q_meas.w(), 3);
-  Serial.print(", ");
-  Serial.print(q_meas.x(), 3);
-  Serial.print(", ");
-  Serial.print(q_meas.y(), 3);
-  Serial.print(", ");
-  Serial.print(q_meas.z(), 3);
-  Serial.print(", 3, ");
-  Serial.print(kalman.state()[0], 3);
-  Serial.print(", ");
-  Serial.print(kalman.state()[1], 3);
-  Serial.print(", ");
-  Serial.print(kalman.state()[2], 3);
-  Serial.print(", ");
-  Serial.print(kalman.state()[3], 3);
-  #endif
+
+  // check for non-linear prediction
+  // Quaternionf dq;
+  // float theta = gyro.norm() * LOOP_TIMING_INTERVAL/1e6;
+  // if (theta > 1e-8f) {
+  //     Vector3f axis = gyro.normalized();
+  //     dq.w() = cos(0.5f * theta);
+  //     dq.vec() = axis * sin(0.5f * theta);
+  // } else {
+  //     dq.w() = 1.0f;
+  //     dq.vec().setZero();
+  // }
+  // Quaternionf q_pred = dq * Quaternionf(kalman.x(0), kalman.x(1), kalman.x(2), kalman.x(3));
+  // q_pred.normalize();
+  // kalman.x << q_pred.w(), q_pred.x(), q_pred.y(), q_pred.z();
+
   kalman.correct(Vector4f(q_meas.w(),q_meas.x(), q_meas.y(), q_meas.z()));
   kalman.x /= kalman.x.norm();
   Quaternionf est = Quaternionf(kalman.x[0], kalman.x[1], kalman.x[2], kalman.x[3]);
@@ -280,19 +267,18 @@ Quaternionf estimate(bool include_yaw_fpk) {
 }
 
 float interp_yaw_fpk() {
-  static float prev_yaw_offset;
   Vector3f act_pos = actuator_position();
   float offset = - act_pos[0] + spm.actuator_origin;
   Vector3f actuator_offset = act_pos + Vector3f::Constant(offset); // offset the actuator position such that m0 is placed at the origin
   float yaw_offset = fpk_yaw_table.interp(actuator_offset[1], actuator_offset[2]); // fpk table is in the m1/m2 domain
-  if (yaw_offset < -2*PI || yaw_offset > 2*PI) { // if yaw value drastically out-of-bounds (NAN)
-    //disable_motors();
-    //next_state = IDLE_STATE;
+  if (yaw_offset < -PI || yaw_offset > PI ||
+  abs(act_pos[0] - act_pos[1] + (2*PI/3)) < MIN_ACT_DIFF || abs(act_pos[1] - act_pos[2] + (2*PI/3)) < MIN_ACT_DIFF || abs(act_pos[2] - act_pos[0] + (2*PI/3)) < MIN_ACT_DIFF) { // if yaw value out-of-bounds (NAN)
+    disable_motors();
+    next_state = IDLE_STATE;
     Serial.println("Platform Out of Bounds! Ensure that position commands have less than a 40 degree slope.");
-    return prev_yaw_offset + offset;
-  } else {
-    prev_yaw_offset = yaw_offset;
+    return FPK_NAN_CODE;
   }
+
   #ifdef DEBUG
   Serial.print("act_pos: ");
   Serial.print(act_pos[0], 3);
@@ -358,11 +344,30 @@ void position_control(Quaternionf& error, Quaternionf& meas, PID& comp) {
 
 void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref) {
   Matrix3f R_mat = spm.R_ypr(ypr_ref);
+
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_velocity_ref, ypr_ref);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
   set_actuator_velocity(actuator_velocity);
   #ifdef INFO
   estimate();
+  // Serial.print("ypr_vel_ref: ");
+  // print_eigen_matrix(ypr_velocity_ref);
+  // Serial.print("xyz_vel: ");
+  // print_eigen_matrix(xyz_platform_velocity);
+  // Serial.print("act_vel: ");
+  // Serial.print(loop_time_elapsed);
+  // Serial.print(",");
+  // print_eigen_matrix(actuator_velocity);
+  // Vector3f m_speed(actuator_to_motor_speed(actuator_velocity[0]), actuator_to_motor_speed(actuator_velocity[2]), actuator_to_motor_speed(actuator_velocity[2]));
+  // Serial.print("m_speed: ");
+  // print_eigen_matrix(m_speed);
+  // Vector3f m_pos(static_cast<long>(stepper_0.position),static_cast<long>(stepper_1.position),static_cast<long>(stepper_2.position));
+  // Serial.print("m_pos: ");
+  // print_eigen_matrix(m_pos);
+  // Serial.print("act_pos: ");
+  // Vector3f act_pos = actuator_position();
+  // print_eigen_matrix(act_pos);
+  // Serial.println();
   #endif
 }
 

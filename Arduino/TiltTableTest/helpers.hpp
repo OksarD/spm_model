@@ -66,7 +66,9 @@ void print_eigen_matrix(Matrix<T, N, M>& mat) {
       Serial.print(mat(i,j), 4);
       Serial.print(", ");
     }
-    Serial.println();
+    if (M > 1) { // dont print newline if a row vector
+      Serial.println();
+    }
   }
 }
 
