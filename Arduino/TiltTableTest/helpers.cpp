@@ -201,24 +201,7 @@ Quaternionf estimate(bool include_yaw_fpk) {
   Quaternionf q_meas = ypr_to_q(ypr_meas);
   Vector3f gyro = gyro_xyz() - gyro_bias;
 
-  kalman.F = xyz_velocity_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
-  kalman.predict();
-
-  // check for non-linear prediction
-  // Quaternionf dq;
-  // float theta = gyro.norm() * LOOP_TIMING_INTERVAL/1e6;
-  // if (theta > 1e-8f) {
-  //     Vector3f axis = gyro.normalized();
-  //     dq.w() = cos(0.5f * theta);
-  //     dq.vec() = axis * sin(0.5f * theta);
-  // } else {
-  //     dq.w() = 1.0f;
-  //     dq.vec().setZero();
-  // }
-  // Quaternionf q_pred = dq * Quaternionf(kalman.x(0), kalman.x(1), kalman.x(2), kalman.x(3));
-  // q_pred.normalize();
-  // kalman.x << q_pred.w(), q_pred.x(), q_pred.y(), q_pred.z();
-
+  kalman.predict(gyro, LOOP_TIMING_INTERVAL/1e6);
   kalman.correct(Vector4f(q_meas.w(),q_meas.x(), q_meas.y(), q_meas.z()));
   kalman.x /= kalman.x.norm();
   Quaternionf est = Quaternionf(kalman.x[0], kalman.x[1], kalman.x[2], kalman.x[3]);
@@ -236,8 +219,7 @@ Quaternionf estimate(bool include_yaw_fpk) {
   #ifdef INFO
   // evaluate kalman filter with these prints
   // second kalman filter to only predict to evaluate accumulated error
-  kalman_predict.F = xyz_velocity_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
-  kalman_predict.predict();
+  kalman_predict.predict(gyro, LOOP_TIMING_INTERVAL/1e6);
   kalman_predict.x /= kalman_predict.x.norm();
   if (state == POSITION_STATE) { kalman_predict.correct(Vector4f(q_meas.w(),q_meas.x(), q_meas.y(), q_meas.z())); }
   Vector3f pred = q_to_ypr(Quaternionf(kalman_predict.x[0], kalman_predict.x[1], kalman_predict.x[2], kalman_predict.x[3])); // predict step for debugging

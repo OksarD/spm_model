@@ -81,6 +81,7 @@ def session_timer_callback(traj_y: trajectory, traj_p: trajectory, traj_r: traje
         session_running = False
         session_loop_timer.stop()
         set_state_idle()
+        disable_motors()
 
 def remove_byte_at_index(data: bytes, index: int) -> bytes:
     b = bytearray(data)

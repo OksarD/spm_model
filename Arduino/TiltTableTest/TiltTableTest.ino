@@ -226,7 +226,7 @@ void loop() {
         case 'I':
           {
             next_state = IDLE_STATE;
-#ifdef INFO
+#ifdef DEBUG
             Serial.println("Device Idle.");
 #endif
             break;
