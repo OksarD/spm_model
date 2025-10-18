@@ -36,7 +36,7 @@ void disable_loop_timing();
 bool loop_timing_proc();
 
 // Estimation functions
-Vector3f accel_ypr(unsigned int samples = 1);
+Vector3f accel_ypr(const Vector3f& gyro = Vector3f::Constant(0), unsigned int samples = 1);
 Vector3f gyro_xyz(unsigned int samples = 1);
 Quaternionf estimate(bool include_yaw_fpk = true);
 float interp_yaw_fpk();

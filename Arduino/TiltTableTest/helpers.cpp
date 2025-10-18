@@ -126,7 +126,7 @@ Vector3f actuator_position() {
 
 void enable_loop_timing() {
   loop_timing_enabled = true;
-  loop_start_time = micros();
+  loop_start_time = micros() - LOOP_TIMING_INTERVAL; // instantiate one sample behind so the first movement command is at zero
   loop_time_proc = 0;
   #ifdef DEBUG
   Serial.println("Loop timing enabled.");
@@ -146,7 +146,7 @@ bool loop_timing_proc() {
   if (!loop_timing_enabled) {
     return true; // always allow loop function when loop timing is disabled
   } else {
-    loop_time_elapsed = micros() - loop_start_time; // elapsed time since session start
+    loop_time_elapsed = micros() - loop_start_time - LOOP_TIMING_INTERVAL; // elapsed time since session start
     if (loop_time_elapsed - loop_time_proc > LOOP_TIMING_INTERVAL) {
       loop_time_proc += LOOP_TIMING_INTERVAL;
       #ifdef TRACE
@@ -161,13 +161,14 @@ bool loop_timing_proc() {
 
 // Estimation functions
 
-Vector3f accel_ypr(unsigned int samples) {
+Vector3f accel_ypr(const Vector3f& gyro, unsigned int samples) {
+  float centrip_g = pow(gyro.norm(), 2) * 0.016 * 9.8067;
   Vector3f accel(0,0,0);
   // Get average accel reading
   for(uint8_t i=0; i<samples; i++) {
     accel[0] += platformIMU.readFloatAccelX();
     accel[1] += platformIMU.readFloatAccelY();
-    accel[2] += platformIMU.readFloatAccelZ();
+    accel[2] += platformIMU.readFloatAccelZ() - centrip_g;
   }
   if(samples > 1) {
     accel /= samples;
@@ -194,12 +195,12 @@ Vector3f gyro_xyz(unsigned int samples) {
 }
 
 Quaternionf estimate(bool include_yaw_fpk) {
-  Vector3f ypr_meas = accel_ypr(1);
+  Vector3f gyro = gyro_xyz() - gyro_bias;
+  Vector3f ypr_meas = accel_ypr(gyro);
   if (include_yaw_fpk) { 
     ypr_meas[0] = interp_yaw_fpk();
   }
   Quaternionf q_meas = ypr_to_q(ypr_meas);
-  Vector3f gyro = gyro_xyz() - gyro_bias;
 
   kalman.predict(gyro, LOOP_TIMING_INTERVAL/1e6);
   kalman.correct(Vector4f(q_meas.w(),q_meas.x(), q_meas.y(), q_meas.z()));
