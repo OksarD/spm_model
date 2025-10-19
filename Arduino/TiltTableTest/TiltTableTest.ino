@@ -1,6 +1,5 @@
 #include "project.hpp"
 #include "helpers.hpp"
-#include "compensator.hpp"
 
 #define SETTLE_UPDATES 50
 
@@ -57,6 +56,9 @@ LookupTable2D fpk_yaw_table(fpk_xy0, fpk_xy0, fpk_dxy, fpk_dxy,
 
 // controller
 PID position_compensator(1, 0, 0, 0.075, 0.5);
+PID traj_x_compensator(4, 25, 0.15, -1, 1, -0.5, 0.5, 3);
+PID traj_y_compensator(4, 25, 0.15, -1, 1, -0.5, 0.5, 3);
+PID traj_z_compensator(4, 25, 0.15, -1, 1, -0.5, 0.5, 3);
 
 void setup() {
   Serial.begin(115200);
@@ -201,6 +203,9 @@ void loop() {
           {
             next_state = TRAJECTORY_CLOSED_STATE;
             enable_loop_timing();
+            traj_x_compensator.reset();
+            traj_y_compensator.reset();
+            traj_z_compensator.reset();
 #ifdef INFO
             Serial.println("Closed-Loop Trajectory Control Enabled. Command (MY<>P<>R<>y<>p<>r<>)");
 #endif
@@ -254,7 +259,7 @@ void loop() {
           Quaternionf meas = estimate(false);
           Quaternionf ref_q = ypr_to_q(Vector3f::Constant(0));
           Quaternionf error = (ref_q * meas.conjugate()).normalized();
-          position_control(error, meas, position_compensator);
+          position_control(error, meas);
           // reset actuator position after homed
 
           if (abs(q_to_aa(error)[0]) < POSITION_ANGLE_TOLERANCE) {
@@ -283,7 +288,7 @@ void loop() {
             Serial.print(ypr_meas[2], 3);
             Serial.println();
             #endif
-            position_control(error, meas, position_compensator);
+            position_control(error, meas);
             if (abs(q_to_aa(error)[0]) < POSITION_ANGLE_TOLERANCE) {
               Serial.println("#F"); // send hash command to python script
               halt_motors();
@@ -304,8 +309,19 @@ void loop() {
       case TRAJECTORY_OPEN_STATE:
         {
           if (movement_ongoing) {
-            //Vector3f ypr_meas = ypr_estimate(); // does the measurement delay make a difference?
             open_trajectory_control(ypr_ref, ypr_velocity_ref);
+          } else {
+            halt_motors();
+          }
+          break;
+        }
+      case TRAJECTORY_CLOSED_STATE:
+        {
+          if (movement_ongoing) {
+            Quaternionf meas_q = estimate();
+            Quaternionf ref_q = ypr_to_q(ypr_ref);
+
+            closed_trajectory_control(ref_q, meas_q, ypr_velocity_ref);
           } else {
             halt_motors();
           }

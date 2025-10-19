@@ -15,9 +15,9 @@ from scipy.interpolate import interp2d
 np.set_printoptions(formatter={'float': '{:.3f}'.format})
 
 # config
-SAVE_TABLE = False
+SAVE_TABLE = True
 PLOT_TABLE = False
-LOAD_TABLE = True
+LOAD_TABLE = False
 POST_PROCESS_TABLE = True
 
 DATA_FOLDER = "fpk_table_data"
@@ -35,8 +35,10 @@ spm = manipulator.Coaxial_SPM(a1, a2, b)
 SLOPE_LIMIT = radians(45)
 
 # Table Params
-TABLE_DIM = 180
+TABLE_DIM = 240
+ACT_LIMIT = 2*pi/3
 NAN_CODE = -999
+
 
 class sample_point:
     def __init__(self, _act, _ypr):
@@ -137,7 +139,7 @@ def keep_center_region(surface, jump_threshold=0.2, connectivity=4, fill_holes=F
 # Main Functions
 
 ypr_table = np.zeros((TABLE_DIM, TABLE_DIM, 3))
-act_lin = np.linspace(spm.actuator_origin-pi, spm.actuator_origin+pi, TABLE_DIM, endpoint=False)
+act_lin = np.linspace(spm.actuator_origin-ACT_LIMIT, spm.actuator_origin+ACT_LIMIT, TABLE_DIM, endpoint=False)
 
 if LOAD_TABLE == False:
     total_entries = len(act_lin)**2

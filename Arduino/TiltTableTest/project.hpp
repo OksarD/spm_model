@@ -5,7 +5,7 @@
 #include "stepper_driver.hpp"
 #include "CoaxialSPM.hpp"
 #include "sensor_fusion.hpp"
-
+#include "compensator.hpp"
 using namespace std;
 using namespace Eigen;
 
@@ -58,12 +58,16 @@ using namespace Eigen;
 #define LOOKUP_TABLE_DIM 180
 #define LOOKUP_TABLE_SIZE 32400 // table dimension squared
 #define FPK_YAW_LOOKUP_TABLE
-// #define FPK_PITCH_LOOKUP_TABLE
-// #define FPK_ROLL_LOOKUP_TABLE
 
 // Control
 #define POSITION_ANGLE_TOLERANCE radians(0.2)
 #define MIN_ACT_DIFF radians(25)
+
+extern PID position_compensator;
+extern PID traj_x_compensator;
+extern PID traj_y_compensator;
+extern PID traj_z_compensator;
+
 extern uint8_t state;
 extern uint8_t next_state;
 

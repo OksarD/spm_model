@@ -42,8 +42,9 @@ Quaternionf estimate(bool include_yaw_fpk = true);
 float interp_yaw_fpk();
 
 // Control functions
-void position_control(Quaternionf& error, Quaternionf& meas, PID& comp);
+void position_control(Quaternionf& error, Quaternionf& meas);
 void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref);
+void closed_trajectory_control(Quaternionf& ref_q, Quaternionf& meas_q, Vector3f& ypr_velocity_ref);
 
 // Conversions
 long actuator_to_motor_position(float act);

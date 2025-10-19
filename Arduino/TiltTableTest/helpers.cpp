@@ -206,18 +206,7 @@ Quaternionf estimate(bool include_yaw_fpk) {
   kalman.correct(Vector4f(q_meas.w(),q_meas.x(), q_meas.y(), q_meas.z()));
   kalman.x /= kalman.x.norm();
   Quaternionf est = Quaternionf(kalman.x[0], kalman.x[1], kalman.x[2], kalman.x[3]);
-  #ifdef TRACE
-  Serial.print(", 4, ");
-  Serial.print(kalman.state()[0], 3);
-  Serial.print(", ");
-  Serial.print(kalman.state()[1], 3);
-  Serial.print(", ");
-  Serial.print(kalman.state()[2], 3);
-  Serial.print(", ");
-  Serial.print(kalman.state()[3], 3);
-  Serial.println();
-  #endif
-  #ifdef INFO
+  #ifdef DEBUG
   // evaluate kalman filter with these prints
   // second kalman filter to only predict to evaluate accumulated error
   kalman_predict.predict(gyro, LOOP_TIMING_INTERVAL/1e6);
@@ -226,24 +215,9 @@ Quaternionf estimate(bool include_yaw_fpk) {
   Vector3f pred = q_to_ypr(Quaternionf(kalman_predict.x[0], kalman_predict.x[1], kalman_predict.x[2], kalman_predict.x[3])); // predict step for debugging
   Vector3f est_ypr = q_to_ypr(est);
   Serial.print(loop_time_elapsed);
-  Serial.print(",");
-  Serial.print(est_ypr[0], 4);
-  Serial.print(",");
-  Serial.print(est_ypr[1], 4);
-  Serial.print(",");
-  Serial.print(est_ypr[2], 4);
-  Serial.print(",");
-  Serial.print(ypr_meas[0], 4);
-  Serial.print(",");
-  Serial.print(ypr_meas[1], 4);
-  Serial.print(",");
-  Serial.print(ypr_meas[2], 4);
-  Serial.print(",");
-  Serial.print(pred[0], 4);
-  Serial.print(",");
-  Serial.print(pred[1], 4);
-  Serial.print(",");
-  Serial.print(pred[2], 4);
+  print_eigen_matrix(est_ypr);
+  print_eigen_matrix(ype_meas);
+  print_eigen_matrix(pred);
   Serial.println();
   #endif
   return est;
@@ -287,12 +261,12 @@ float interp_yaw_fpk() {
 }
 
 // Control functions
-void position_control(Quaternionf& error, Quaternionf& meas, PID& comp) {
+void position_control(Quaternionf& error, Quaternionf& meas) {
   Vector4f error_aa = q_to_aa(error);
   if (error_aa[0] < 0) {
     error_aa *= -1;  // ensure positive angular errors only
   }
-  float compensated_error = comp.update(error_aa[0], LOOP_TIMING_INTERVAL/1e6); // compensate for the angle and not direction
+  float compensated_error = position_compensator.update(error_aa[0], LOOP_TIMING_INTERVAL/1e6); // compensate for the angle and not direction
   error_aa[0] = compensated_error;
   Vector3f control = aa_to_xyz(error_aa);
   Matrix3f R = aa_to_R(q_to_aa(meas));
@@ -331,26 +305,51 @@ void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref) {
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_velocity_ref, ypr_ref);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
   set_actuator_velocity(actuator_velocity);
-  #ifdef INFO
+  #ifdef DEBUG
   estimate();
-  // Serial.print("ypr_vel_ref: ");
-  // print_eigen_matrix(ypr_velocity_ref);
-  // Serial.print("xyz_vel: ");
-  // print_eigen_matrix(xyz_platform_velocity);
-  // Serial.print("act_vel: ");
-  // Serial.print(loop_time_elapsed);
-  // Serial.print(",");
-  // print_eigen_matrix(actuator_velocity);
-  // Vector3f m_speed(actuator_to_motor_speed(actuator_velocity[0]), actuator_to_motor_speed(actuator_velocity[2]), actuator_to_motor_speed(actuator_velocity[2]));
-  // Serial.print("m_speed: ");
-  // print_eigen_matrix(m_speed);
-  // Vector3f m_pos(static_cast<long>(stepper_0.position),static_cast<long>(stepper_1.position),static_cast<long>(stepper_2.position));
-  // Serial.print("m_pos: ");
-  // print_eigen_matrix(m_pos);
-  // Serial.print("act_pos: ");
-  // Vector3f act_pos = actuator_position();
-  // print_eigen_matrix(act_pos);
-  // Serial.println();
+  Vector3f m_speed(actuator_to_motor_speed(actuator_velocity[0]), 
+            actuator_to_motor_speed(actuator_velocity[2]), 
+            actuator_to_motor_speed(actuator_velocity[2])
+            );
+  Vector3f m_pos(static_cast<long>(stepper_0.position),static_cast<long>(stepper_1.position),static_cast<long>(stepper_2.position));
+  Vector3f act_pos = actuator_position();
+  Serial.print(loop_time_elapsed);
+  Serial.print(",");
+  print_eigen_matrix(actuator_velocity);
+  print_eigen_matrix(m_speed);
+  print_eigen_matrix(m_pos);
+  print_eigen_matrix(act_pos);
+  Serial.println();
+  #endif
+}
+
+void closed_trajectory_control(Quaternionf& ref_q, Quaternionf& meas_q, Vector3f& ypr_velocity_ref) {
+  Vector3f error_xyz = aa_to_xyz(q_to_aa((ref_q * meas_q.conjugate()).normalized()));
+
+  // apply compensator to cartesian components
+  float dt = LOOP_TIMING_INTERVAL/1e6;
+  Vector3f control(traj_x_compensator.update(error_xyz.x(), dt),
+                  traj_y_compensator.update(error_xyz.y(), dt),
+                  traj_z_compensator.update(error_xyz.z(), dt)
+                  );
+  
+  // velocity feedforward
+  Vector3f xyz_vel_ref = spm.ypr_to_xyz_velocity(ypr_velocity_ref, q_to_ypr(ref_q));
+  Matrix3f R_mat = aa_to_R(q_to_aa(meas_q));
+  
+  // combine open and closed loop signals
+  Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_vel_ref + control);
+  set_actuator_velocity(actuator_velocity);
+  #ifdef INFO
+  Vector3f ypr_meas = q_to_ypr(meas_q);
+  Vector3f ypr_ref = q_to_ypr(ref_q);
+  Serial.print(loop_time_elapsed);
+  Serial.print(",");
+  print_eigen_matrix(ypr_ref);
+  print_eigen_matrix(ypr_meas);
+  print_eigen_matrix(control);
+  print_eigen_matrix(xyz_vel_ref);
+  Serial.println();
   #endif
 }
 
