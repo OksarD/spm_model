@@ -55,10 +55,10 @@ LookupTable2D fpk_yaw_table(fpk_xy0, fpk_xy0, fpk_dxy, fpk_dxy,
                             LOOKUP_TABLE_DIM, LOOKUP_TABLE_DIM, yaw_table);
 
 // controller
-PID position_compensator(1, 0, 0, 0.075, 0.5);
-PID traj_x_compensator(4, 25, 0.15, -1, 1, -0.5, 0.5, 3);
-PID traj_y_compensator(4, 25, 0.15, -1, 1, -0.5, 0.5, 3);
-PID traj_z_compensator(4, 25, 0.15, -1, 1, -0.5, 0.5, 3);
+PID position_compensator(1, 0, 0, 0.1, 0.5);
+PID traj_x_compensator(3, 20, 0.1, -1, 1, -0.5, 0.5, 3);
+PID traj_y_compensator(3, 20, 0.1, -1, 1, -0.5, 0.5, 3);
+PID traj_z_compensator(3, 20, 0.1, -1, 1, -0.5, 0.5, 3);
 
 void setup() {
   Serial.begin(115200);

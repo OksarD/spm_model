@@ -30,7 +30,7 @@ using namespace Eigen;
 #define DIR_3 8
 #define STEP_3 9 //PWM
 #define SLEEP_3 10
-#define MICROSTEP 16 // Microstepping is hardwired to 8 (M1/M0 set HIGH)
+#define MICROSTEP 8 // Microstepping is hardwired to 8 (M1/M0 set HIGH)
 #define MOTOR_STEPS 200 // Motor Steps per revolution
 #define MAX_SPEED 5000
 #define ROT_SCALE 5.2 // temporary pulley with 20 teeth
@@ -44,6 +44,7 @@ using namespace Eigen;
 #define XOFF 0x13
 #define LOOP_TIMING_INTERVAL 20000 // microseconds 
 #define DELIM '\n'
+#define REF_DOWNSCALE 0.0001 // refernce values come in 10,000x bigger to avoid decoding decimal values
 
 // States
 #define IDLE_STATE 0

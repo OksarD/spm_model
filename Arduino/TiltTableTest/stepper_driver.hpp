@@ -58,5 +58,6 @@ private:
     vector<StepperMotor*> motors; // reserve the last register for capture
     float speed_scale;
     uint8_t prescaler;
+    uint8_t tick_slop; // amount of ticks to schedule a step ahead of the current time (relies on processor speed)
 
 };

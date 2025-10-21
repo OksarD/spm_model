@@ -9,6 +9,7 @@ import threading
 from typing import Callable
 from types import SimpleNamespace
 from scipy.spatial.transform import Rotation as R
+from utils import *
 
 class trajectory():
     def __init__(self, _t):
@@ -38,37 +39,20 @@ class trajectory():
         if len(self.y) == 0 or len(self.p) == 0 or len(self.r) == 0:
             raise Exception("ypr trajecory not present to convert.")
         else:
-            self.q = []
             for i in range(self.size):
-                r = R.from_euler('zyx', [self.y[i], self.p[i], self.r[i]])
-                self.q.append(r.as_quat())
-        self.enforce_quaternion_continuity()
-
-    def enforce_quaternion_continuity(self):
-        for i in range(1, self.size):
-            if np.dot(self.q[i-1], self.q[i]) < 0:
-                self.q[i] = -self.q[i]            
+                wxyz = ypr_to_q([self.y[i], self.p[i], self.r[i]])
+                self.q.append([wxyz[1], wxyz[2], wxyz[3], wxyz[0]])
 
     def derive_xyz(self):
         r = R.from_quat(self.q)
-        N = len(r)
-        self.omega = np.zeros((N, 3))
-
-        # Forward difference for first element
-        q_rel = r[1] * r[0].inv()
-        self.omega[0] = (q_rel.as_rotvec() / self.dt) #r[0].as_matrix() @ (q_rel.as_rotvec() / self.dt)
-
-        # Central differences for middle elements
-        for i in range(1, N-1):
-            q_rel_forward = r[i+1] * r[i].inv()
-            q_rel_backward = r[i] * r[i-1].inv()
-            omega_local = (q_rel_forward.as_rotvec() - q_rel_backward.as_rotvec()) / (2 * self.dt)
-            self.omega[i] = omega_local #r[i].as_matrix() @ omega_local
-
-        # Backward difference for last element
-        q_rel = r[N-1] * r[N-2].inv()
-        #self.omega[N-1] = r[N-1].as_matrix() @ (q_rel.as_rotvec() / self.dt)
-        self.omega[N-1] = (q_rel.as_rotvec() / self.dt)
+        self.omega = np.zeros((self.size, 3)) # single difference at beginning 
+        r_0 = r_diff = r[1] * r[0].inv()
+        self.omega[0] = r_0.as_rotvec() / self.dt
+        for i in range(1, self.size-1):
+            r_diff = r[i+1] * r[i-1].inv()
+            self.omega[i] = r_diff.as_rotvec() / (2 * self.dt) # central difference
+        r_size = r_diff = r[self.size-1] * r[self.size-2].inv()
+        self.omega[self.size-1] = r_size.as_rotvec() / self.dt # single difference at end
 
     def __iter__(self):
         return self
@@ -81,10 +65,37 @@ class trajectory():
         else:
             raise StopIteration
 
-    def plot(self):
+    def plot_ypr(self):
+        plt.figure(figsize=(10,6))
+        plt.subplot(2,1,1)
+        plt.plot(self.t, self.y, label=("y"))
+        plt.plot(self.t, self.p, label=("p"))
+        plt.plot(self.t, self.r, label=("r"))
+        plt.legend(); plt.grid()
+        plt.show(block=False)
+        plt.pause(0.001)
+
+    def plot_ypr_deriv(self):
+        plt.figure(figsize=(10,6))
+        plt.subplot(2,1,1)
+        plt.plot(self.t, self.dy, label=("dy"))
+        plt.plot(self.t, self.dp, label=("dp"))
+        plt.plot(self.t, self.dr, label=("dr"))
+        plt.legend(); plt.grid()
+        plt.show(block=False)
+        plt.pause(0.001)
+
+    def plot_q(self):
         plt.figure(figsize=(10,6))
         plt.subplot(2,1,1)
         plt.plot(self.t, self.q, label=("x", "y", "z", "w"))
+        plt.legend(); plt.grid()
+        plt.show(block=False)
+        plt.pause(0.001)
+
+    def plot_xyz(self):
+        plt.figure(figsize=(10,6))
+        plt.subplot(2,1,1)
         plt.plot(self.t, self.omega[:,0], label="dx")
         plt.plot(self.t, self.omega[:,1], label="dy")
         plt.plot(self.t, self.omega[:,2], label="dz")

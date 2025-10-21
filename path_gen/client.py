@@ -10,6 +10,7 @@ PLOT_TRAJECTORY = True
 SAMPLE_FREQUENCY = 50 # Hz
 FILTER_FREQUENCY = 10 # Hz
 SERIAL_SPEEDUP = 2 # send serial faster than the sample frequency to ensure buffer filling
+REF_SCALE = 10000
 
 XON = b'\x11'
 XOFF = b'\x13'
@@ -30,23 +31,23 @@ generator = trajectoryGenerator(SAMPLE_FREQUENCY, FILTER_FREQUENCY)
 
 def trajectory_command(y,p,r,dy,dp,dr):
     # convert to milliradians(/s)
-    m_y = int(y*1000)
-    m_p = int(p*1000)
-    m_r = int(r*1000)
-    m_dy = int(dy*1000)
-    m_dp = int(dp*1000)
-    m_dr = int(dr*1000)
+    m_y = int(y*REF_SCALE)
+    m_p = int(p*REF_SCALE)
+    m_r = int(r*REF_SCALE)
+    m_dy = int(dy*REF_SCALE)
+    m_dp = int(dp*REF_SCALE)
+    m_dr = int(dr*REF_SCALE)
     return "MY{}P{}R{}y{}p{}r{}\n".format(m_y,m_p,m_r,m_dy,m_dp,m_dr)
 
 def trajectory_command_q(w,x,y,z,dx,dy,dz):
     # convert to milliradians(/s)
-    m_w = int(w*1000)
-    m_x = int(x*1000)
-    m_y = int(y*1000)
-    m_z = int(z*1000)
-    m_dx = int(dx*1000)
-    m_dy = int(dy*1000)
-    m_dz = int(dz*1000)
+    m_w = int(w*REF_SCALE)
+    m_x = int(x*REF_SCALE)
+    m_y = int(y*REF_SCALE)
+    m_z = int(z*REF_SCALE)
+    m_dx = int(dx*REF_SCALE)
+    m_dy = int(dy*REF_SCALE)
+    m_dz = int(dz*REF_SCALE)
     return "QW{}X{}Y{}Z{}x{}y{}z{}\n".format(m_w,m_x,m_y,m_z,m_dx,m_dy,m_dz)
 
 def position_command(y,p,r):
@@ -169,9 +170,6 @@ def trajectory_session(traj: trajectory, closed_loop=True):
 
     session_loop_timer.start()
     session_running = True
-    # Plot
-    if PLOT_TRAJECTORY:
-        traj.plot()
 
 def main():
     global session_running
@@ -247,6 +245,9 @@ def main():
                         traj = generator.trajectory_from_ypr_func(duration, yf, pf, rf)
                         traj.convert_ypr_to_q()
                         traj.derive_xyz()
+                        traj.plot_ypr()
+                        traj.plot_q()
+                        traj.plot_xyz()
                         trajectory_session((traj), closed_loop=closed_loop)
     
         time.sleep(0.01)

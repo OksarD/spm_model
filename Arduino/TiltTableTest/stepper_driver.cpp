@@ -25,7 +25,7 @@ void StepperMotor::setSpeed(float speed) {
         if (halted) {
             halted = false;
             prev_cc = timer->CC[ccIndex];
-            timer->CC[ccIndex] = timer_current() + 1; // initialise CC so the interupt fires on the next tick
+            timer->CC[ccIndex] = timer_current() + tick_slop; // initialise CC so the interupt fires on the next tick
         } else {
             // if the new speed value is slow enough to be set immediately, then set the corresponding cc value,
             // if it is too fast, set the cc to the next tick
@@ -36,7 +36,7 @@ void StepperMotor::setSpeed(float speed) {
                 timer->CC[ccIndex] = new_cc;
             } else {
                 prev_cc = timer->CC[ccIndex];
-                timer->CC[ccIndex] = current_cc + 1;
+                timer->CC[ccIndex] = current_cc + tick_slop;
             }
         }
         // set direction
@@ -90,7 +90,8 @@ void StepperMotor::step() {
 
 StepperDriver::StepperDriver(NRF_TIMER_Type* _timer, IRQn_Type _irq, uint8_t _reg_max, uint8_t _prescaler)
     : timer(_timer), irq(_irq), motorCount(0), reg_max(_reg_max), 
-    prescaler(_prescaler), speed_scale(pow(2,(4-_prescaler))*1e6) {}
+    prescaler(_prescaler), speed_scale(pow(2,(4-_prescaler))*1e6),
+    tick_slop(2) {}
 
 void StepperDriver::begin() {
     timer->TASKS_STOP  = 1;  // just in case it's running

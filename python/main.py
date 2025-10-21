@@ -36,7 +36,7 @@ def main():
     w_pitch = 0
     w_roll = 0
     w_ypr = np.array([w_yaw, w_pitch, w_roll])
-    w_xyz = spm.ypr_to_xyz_velocity(w_ypr, ypr)
+    w_xyz = ypr_to_xyz_velocity(w_ypr, ypr)
 
     print("w_xyz", w_xyz)
 

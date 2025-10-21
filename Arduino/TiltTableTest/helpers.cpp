@@ -39,23 +39,15 @@ Vector3f extract_position_ypr(char* command) {
               ExtractValue(command, 'P'),
               ExtractValue(command, 'R')
   );
-  return pos * 0.001; // convert to rad/s
+  return pos * REF_DOWNSCALE; // convert to rad/s
 }
-
-// Vector3f extract_velocity(char* command) {
-//   Vector3f vel(ExtractValue(command, 'y'),
-//               ExtractValue(command, 'p'),
-//               ExtractValue(command, 'r')
-//   );
-//   return vel * 0.001; // convert to rad/s
-// }
 
 Quaternionf extract_position_q(char* command) {
   Quaternionf q;
-  q.w() = ExtractValue(command, 'W') * 0.001;
-  q.x() = ExtractValue(command, 'X') * 0.001;
-  q.y() = ExtractValue(command, 'Y') * 0.001;
-  q.z() = ExtractValue(command, 'Z') * 0.001;
+  q.w() = ExtractValue(command, 'W') * REF_DOWNSCALE;
+  q.x() = ExtractValue(command, 'X') * REF_DOWNSCALE;
+  q.y() = ExtractValue(command, 'Y') * REF_DOWNSCALE;
+  q.z() = ExtractValue(command, 'Z') * REF_DOWNSCALE;
   return q;
 }
 
@@ -64,7 +56,7 @@ Vector3f extract_velocity_xyz(char* command) {
               ExtractValue(command, 'y'),
               ExtractValue(command, 'z')
   );
-  return xyz * 0.001; // convert to rad/s
+  return xyz * REF_DOWNSCALE; // convert to rad/s
 }
 
 void disable_motors(){

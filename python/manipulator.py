@@ -282,18 +282,3 @@ class Coaxial_SPM:
         # ax.set_box_aspect((1, 1, 1))
         # plt.show()
         return x_v, y_v, z_v
-    
-    def ypr_to_xyz_velocity(self, ypr_velocity, ypr_point):
-        # https://physics.stackexchange.com/questions/492906/application-of-angular-velocity-to-euler-angles
-        yaw_v = ypr_velocity[0]
-        pitch_v = ypr_velocity[1]
-        roll_v = ypr_velocity[2]
-        yaw = ypr_point[0]
-        pitch = ypr_point[1]
-        x = np.array([1,0,0])
-        y = np.array([0,1,0])
-        z = np.array([0,0,1])
-        E_yaw = R_z(yaw)
-        E_pitch = E_yaw@R_y(pitch)
-        w = yaw_v*z + pitch_v*(E_yaw@y) + roll_v*(E_pitch@x)
-        return w
