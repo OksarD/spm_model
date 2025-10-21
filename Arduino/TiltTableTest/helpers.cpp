@@ -34,7 +34,7 @@ void clearCharArray(char* charArray, size_t size) {
   }
 }
 
-Vector3f extract_position(char* command) {
+Vector3f extract_position_ypr(char* command) {
   Vector3f pos(ExtractValue(command, 'Y'),
               ExtractValue(command, 'P'),
               ExtractValue(command, 'R')
@@ -42,12 +42,29 @@ Vector3f extract_position(char* command) {
   return pos * 0.001; // convert to rad/s
 }
 
-Vector3f extract_velocity(char* command) {
-  Vector3f vel(ExtractValue(command, 'y'),
-              ExtractValue(command, 'p'),
-              ExtractValue(command, 'r')
+// Vector3f extract_velocity(char* command) {
+//   Vector3f vel(ExtractValue(command, 'y'),
+//               ExtractValue(command, 'p'),
+//               ExtractValue(command, 'r')
+//   );
+//   return vel * 0.001; // convert to rad/s
+// }
+
+Quaternionf extract_position_q(char* command) {
+  Quaternionf q;
+  q.w() = ExtractValue(command, 'W') * 0.001;
+  q.x() = ExtractValue(command, 'X') * 0.001;
+  q.y() = ExtractValue(command, 'Y') * 0.001;
+  q.z() = ExtractValue(command, 'Z') * 0.001;
+  return q;
+}
+
+Vector3f extract_velocity_xyz(char* command) {
+  Vector3f xyz(ExtractValue(command, 'x'),
+              ExtractValue(command, 'y'),
+              ExtractValue(command, 'z')
   );
-  return vel * 0.001; // convert to rad/s
+  return xyz * 0.001; // convert to rad/s
 }
 
 void disable_motors(){
@@ -147,7 +164,7 @@ bool loop_timing_proc() {
     return true; // always allow loop function when loop timing is disabled
   } else {
     loop_time_elapsed = micros() - loop_start_time - LOOP_TIMING_INTERVAL; // elapsed time since session start
-    if (loop_time_elapsed - loop_time_proc > LOOP_TIMING_INTERVAL) {
+    if (loop_time_elapsed - loop_time_proc > 0) {
       loop_time_proc += LOOP_TIMING_INTERVAL;
       #ifdef TRACE
       Serial.println("Loop timing proc");
@@ -299,11 +316,9 @@ void position_control(Quaternionf& error, Quaternionf& meas) {
   #endif
 }
 
-void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref) {
-  Matrix3f R_mat = spm.R_ypr(ypr_ref);
-
-  Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_velocity_ref, ypr_ref);
-  Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
+void open_trajectory_control(Quaternionf& ref_q, Vector3f& ref_xyz) {
+  Matrix3f R = aa_to_R(q_to_aa(ref_q));
+  Vector3f actuator_velocity = spm.solve_ivk(R, ref_xyz);
   set_actuator_velocity(actuator_velocity);
   #ifdef DEBUG
   estimate();
@@ -323,9 +338,8 @@ void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref) {
   #endif
 }
 
-void closed_trajectory_control(Quaternionf& ref_q, Quaternionf& meas_q, Vector3f& ypr_velocity_ref) {
+void closed_trajectory_control(Quaternionf& ref_q, Quaternionf& meas_q, Vector3f& ref_xyz) {
   Vector3f error_xyz = aa_to_xyz(q_to_aa((ref_q * meas_q.conjugate()).normalized()));
-
   // apply compensator to cartesian components
   float dt = LOOP_TIMING_INTERVAL/1e6;
   Vector3f control(traj_x_compensator.update(error_xyz.x(), dt),
@@ -334,11 +348,9 @@ void closed_trajectory_control(Quaternionf& ref_q, Quaternionf& meas_q, Vector3f
                   );
   
   // velocity feedforward
-  Vector3f xyz_vel_ref = spm.ypr_to_xyz_velocity(ypr_velocity_ref, q_to_ypr(ref_q));
-  Matrix3f R_mat = aa_to_R(q_to_aa(meas_q));
-  
+  Matrix3f R = aa_to_R(q_to_aa(meas_q));
   // combine open and closed loop signals
-  Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_vel_ref + control);
+  Vector3f actuator_velocity = spm.solve_ivk(R, ref_xyz + control);
   set_actuator_velocity(actuator_velocity);
   #ifdef INFO
   Vector3f ypr_meas = q_to_ypr(meas_q);
@@ -348,7 +360,7 @@ void closed_trajectory_control(Quaternionf& ref_q, Quaternionf& meas_q, Vector3f
   print_eigen_matrix(ypr_ref);
   print_eigen_matrix(ypr_meas);
   print_eigen_matrix(control);
-  print_eigen_matrix(xyz_vel_ref);
+  print_eigen_matrix(ref_xyz);
   Serial.println();
   #endif
 }

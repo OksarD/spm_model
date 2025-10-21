@@ -105,8 +105,8 @@ void loop() {
   }
 
   // Reference signals
-  static Vector3f ypr_ref = Vector3f::Constant(0);
-  static Vector3f ypr_velocity_ref = Vector3f::Constant(0);
+  static Quaternionf ref_q = Quaternionf::Identity();
+  static Vector3f ref_xyz = Vector3f::Constant(0);
 
   static bool movement_ongoing = false;
   char* command;
@@ -133,11 +133,19 @@ void loop() {
         case 'M':
           {
             movement_ongoing = true;
+            if (state == POSITION_STATE) {
+              ref_q = ypr_to_q(extract_position_ypr(command));
+            }
+            break;
+          }
+        case 'Q':
+          {
+            movement_ongoing = true;
             if (state == TRAJECTORY_OPEN_STATE || state == TRAJECTORY_CLOSED_STATE) {
-              ypr_ref = extract_position(command);
-              ypr_velocity_ref = extract_velocity(command);
+              ref_q = extract_position_q(command);
+              ref_xyz = extract_velocity_xyz(command);
             } else if (state == POSITION_STATE) {
-              ypr_ref = extract_position(command);
+              ref_q = extract_position_q(command);
             }
             break;
           }
@@ -171,7 +179,7 @@ void loop() {
               delayMicroseconds(LOOP_TIMING_INTERVAL);
             }                 
             enable_loop_timing();
-#ifdef DEBUG
+#ifdef INFO
             Vector3f est_ypr = q_to_ypr(est);
             Serial.print("Gyro drift: ");
             Serial.print(gyro_bias[0], 3);
@@ -257,7 +265,6 @@ void loop() {
       case HOME_STATE:
         {
           Quaternionf meas = estimate(false);
-          Quaternionf ref_q = ypr_to_q(Vector3f::Constant(0));
           Quaternionf error = (ref_q * meas.conjugate()).normalized();
           position_control(error, meas);
           // reset actuator position after homed
@@ -276,7 +283,6 @@ void loop() {
         {
           if (movement_ongoing) {
             Quaternionf meas = estimate();
-            Quaternionf ref_q = ypr_to_q(ypr_ref);
             Quaternionf error = (ref_q * meas.conjugate()).normalized();
             #ifdef DEBUG
             Vector3f ypr_meas = q_to_ypr(meas);
@@ -293,13 +299,14 @@ void loop() {
               Serial.println("#F"); // send hash command to python script
               halt_motors();
               movement_ongoing = false;
-#ifdef INFO
+#ifdef INFO   
+              Vector3f ref_ypr = q_to_ypr(ref_q);
               Serial.print("Moved to ");
-              Serial.print(ypr_ref[0]);
+              Serial.print(ref_ypr[0]);
               Serial.print(", ");
-              Serial.print(ypr_ref[1]);
+              Serial.print(ref_ypr[1]);
               Serial.print(", ");
-              Serial.print(ypr_ref[2]);
+              Serial.print(ref_ypr[2]);
               Serial.println();
 #endif
             }
@@ -309,7 +316,7 @@ void loop() {
       case TRAJECTORY_OPEN_STATE:
         {
           if (movement_ongoing) {
-            open_trajectory_control(ypr_ref, ypr_velocity_ref);
+            open_trajectory_control(ref_q, ref_xyz);
           } else {
             halt_motors();
           }
@@ -319,9 +326,7 @@ void loop() {
         {
           if (movement_ongoing) {
             Quaternionf meas_q = estimate();
-            Quaternionf ref_q = ypr_to_q(ypr_ref);
-
-            closed_trajectory_control(ref_q, meas_q, ypr_velocity_ref);
+            closed_trajectory_control(ref_q, meas_q, ref_xyz);
           } else {
             halt_motors();
           }

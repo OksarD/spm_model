@@ -27,8 +27,10 @@ char* buffer_pop();
 void clearCharArray(char* charArray, size_t size);
 float ExtractValue(const char* linea, char eje);
 bool hasChar(const char* linea, char eje);
-Vector3f extract_position(char* command);
-Vector3f extract_velocity(char* command);
+Vector3f extract_position_ypr(char* command);
+Quaternionf extract_position_q(char* command);
+Vector3f extract_velocity_xyz(char* command);
+//Vector3f extract_velocity(char* command);
 
 // Loop Timing
 void enable_loop_timing();
@@ -43,8 +45,8 @@ float interp_yaw_fpk();
 
 // Control functions
 void position_control(Quaternionf& error, Quaternionf& meas);
-void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref);
-void closed_trajectory_control(Quaternionf& ref_q, Quaternionf& meas_q, Vector3f& ypr_velocity_ref);
+void open_trajectory_control(Quaternionf& ref_q, Vector3f& ref_xyz);
+void closed_trajectory_control(Quaternionf& ref_q, Quaternionf& meas_q, Vector3f& ref_xyz);
 
 // Conversions
 long actuator_to_motor_position(float act);
