@@ -325,7 +325,6 @@ void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref) {
 
 void closed_trajectory_control(Quaternionf& ref_q, Quaternionf& meas_q, Vector3f& ypr_velocity_ref) {
   Vector3f error_xyz = aa_to_xyz(q_to_aa((ref_q * meas_q.conjugate()).normalized()));
-
   // apply compensator to cartesian components
   float dt = LOOP_TIMING_INTERVAL/1e6;
   Vector3f control(traj_x_compensator.update(error_xyz.x(), dt),

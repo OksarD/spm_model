@@ -21,7 +21,7 @@ void StepperMotor::setSpeed(float speed) {
             timer->CC[ccIndex] = timer_current() - 1; // set compare reg behind timer so it takes max time to step
         }
     } else {
-        intervalTicks = round(abs(speed_scale/speed));
+        intervalTicks = round(abs(speed_scale/(speed*2)));
         if (halted) {
             halted = false;
             prev_cc = timer->CC[ccIndex];
@@ -82,8 +82,10 @@ void StepperMotor::set_dir(bool dir) {
 void StepperMotor::step() {
     step_state = !step_state;
     digitalWrite(stepPin, step_state);
-    if (direction) position++;
-    else position--;
+    if (step_state) {
+        if (direction) position++;
+        else position--;
+    }
     prev_cc = timer->CC[ccIndex];
     timer->CC[ccIndex] += intervalTicks;
 }
@@ -99,6 +101,8 @@ void StepperDriver::begin() {
     timer->MODE = 0UL;    // timer, not counter
     timer->PRESCALER = prescaler; // freq = 16Mhz / 2^prescaler = 1Mhz 
     timer->INTENSET = 0; // NRF_RTC_INT_COMPARE0_MASK | NRF_RTC_INT_COMPARE1_MASK | NRF_RTC_INT_COMPARE2_MASK;
+    NVIC_SetPriority(UARTE0_UART0_IRQn, 1);
+    NVIC_SetPriority(irq, 2);
     NVIC_EnableIRQ(irq);
     timer->TASKS_START = 1;
 }

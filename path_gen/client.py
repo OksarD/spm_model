@@ -179,74 +179,69 @@ def main():
                 if (session_running == True):
                     print("Cannot start a new session when one is alrady running!")
                 else:
-                # commands to run scripts
-                    
-                    if line == "OYT": # yaw triangle
+                # commandss to run scripts
+                    traj_y = None
+                    traj_p = None
+                    traj_r = None
+
+                    if line == "YT": # yaw triangle
                         # period of 4 so that it spends 2 seconds per stride, therefore travels at the speed of the amplitude
                         test_duration = 20
                         traj_y = generator.generate_triangle_trajectory(radians(45),4,test_duration, filter=True)
                         traj_p = generator.generate_zero_trajectory(test_duration)
                         traj_r = generator.generate_zero_trajectory(test_duration)
-                        trajectory_session(traj_y, traj_p, traj_r)
 
-                    if line == "OYPT": # yaw-pitch synchronous triangle
+                    if line == "YPT": # yaw-pitch synchronous triangle
                         # period of 4 so that it spends 2 seconds per stride, therefore travels at the speed of the amplitude
                         test_duration = 20
                         traj_y = generator.generate_triangle_trajectory(radians(45),4,test_duration, filter=True)
                         traj_p = generator.generate_triangle_trajectory(radians(30),4,test_duration, filter=True)
                         traj_r = generator.generate_zero_trajectory(test_duration)
-                        trajectory_session(traj_y, traj_p, traj_r)
 
-                    if line == "OYRT": # yaw-roll synchronous triangle
+                    if line == "YRT": # yaw-roll synchronous triangle
                         test_duration = 20
                         traj_y = generator.generate_triangle_trajectory(radians(45),4,test_duration, filter=True)
                         traj_p = generator.generate_zero_trajectory(test_duration)
                         traj_r = generator.generate_triangle_trajectory(radians(-30),4,test_duration, filter=True)
-                        trajectory_session(traj_y, traj_p, traj_r)
 
-                    if line == "OPRT": # pitch_roll synchronous triangle
+                    if line == "PRT": # pitch_roll synchronous triangle
                         test_duration = 20
                         traj_y = generator.generate_zero_trajectory(test_duration)
                         traj_p = generator.generate_triangle_trajectory(radians(30),4,test_duration, filter=True)
                         traj_r = generator.generate_triangle_trajectory(radians(30),4,test_duration, filter=True)
-                        trajectory_session(traj_y, traj_p, traj_r)
 
-                    if line == "OYPRT": # yaw-pitch-roll synchronous triangle
+                    if line == "YPRT": # yaw-pitch-roll synchronous triangle
                         test_duration = 20
-                        traj_y = generator.generate_triangle_trajectory(radians(4.5),0.4,test_duration, filter=True)
-                        traj_p = generator.generate_triangle_trajectory(radians(3),0.4,test_duration, filter=True)
-                        traj_r = generator.generate_triangle_trajectory(radians(3),0.4,test_duration, filter=True)
-                        trajectory_session(traj_y, traj_p, traj_r)
+                        traj_y = generator.generate_triangle_trajectory(radians(45),4,test_duration, filter=True)
+                        traj_p = generator.generate_triangle_trajectory(radians(30),4,test_duration, filter=True)
+                        traj_r = generator.generate_triangle_trajectory(radians(30),4,test_duration, filter=True)
                     
-                    if line == "OYS": # yaw sinusoid
+                    if line == "YS": # yaw sinusoid
                         test_duration = 20
-                        traj_y = generator.generate_sin_trajectory(radians(45),4,test_duration, filter=True)
+                        traj_y = generator.generate_sin_trajectory(radians(45),6,test_duration, filter=True)
                         traj_p = generator.generate_zero_trajectory(test_duration)
                         traj_r = generator.generate_zero_trajectory(test_duration)
-                        trajectory_session(traj_y, traj_p, traj_r)
                     
-                    if line == "OYPS": # yaw-pitch off-sync sinusoid
+                    if line == "YPS": # yaw-pitch off-sync sinusoid
                         test_duration = 20
-                        traj_y = generator.generate_sin_trajectory(radians(45),4,test_duration, filter=True)
-                        traj_p = generator.generate_cos_trajectory(radians(30),4,test_duration, filter=True)
+                        traj_y = generator.generate_sin_trajectory(radians(45),6,test_duration, filter=True)
+                        traj_p = generator.generate_cos_trajectory(radians(30),6,test_duration, filter=True)
                         traj_r = generator.generate_zero_trajectory(test_duration)
-                        trajectory_session(traj_y, traj_p, traj_r)
 
-                    if line == "OYRS": # yaw-roll off-sync sinusoid
+                    if line == "YRS": # yaw-roll off-sync sinusoid
                         test_duration = 20
-                        traj_y = generator.generate_sin_trajectory(radians(45),4,test_duration, filter=True)
+                        traj_y = generator.generate_sin_trajectory(radians(45),6,test_duration, filter=True)
                         traj_p = generator.generate_zero_trajectory(test_duration)
-                        traj_r = generator.generate_cos_trajectory(radians(30),4,test_duration, filter=True)
-                        trajectory_session(traj_y, traj_p, traj_r)
+                        traj_r = generator.generate_cos_trajectory(radians(30),6,test_duration, filter=True)
 
-                    if line == "OPRS": # yaw-pitch off-sync sinusoid
+                    if line == "PRS": # yaw-pitch off-sync sinusoid
                         test_duration = 20
                         traj_y = generator.generate_zero_trajectory(test_duration)
-                        traj_p = generator.generate_sin_trajectory(radians(20),4,test_duration, filter=True)
-                        traj_r = generator.generate_cos_trajectory(radians(20),4,test_duration, filter=True)
-                        trajectory_session(traj_y, traj_p, traj_r)
+                        traj_p = generator.generate_sin_trajectory(radians(20),6,test_duration, filter=True)
+                        traj_r = generator.generate_cos_trajectory(radians(20),6,test_duration, filter=True)
                 
-    
+                    trajectory_session(traj_y, traj_p, traj_r, closed_loop=True)
+
         time.sleep(0.01)
 
 main()
