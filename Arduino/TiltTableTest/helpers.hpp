@@ -3,8 +3,10 @@
 #include "project.hpp"
 #include <ArduinoEigen.h>
 #include <cmath>
+#include <algorithm>
 #include <complex>
 #include <vector>
+#include "compensator.hpp"
 
 using namespace std;
 using namespace Eigen;
@@ -34,7 +36,7 @@ void disable_loop_timing();
 bool loop_timing_proc();
 
 // Estimation functions
-Vector3f accel_ypr(unsigned int samples = 1);
+Vector3f accel_ypr(const Vector3f& gyro = Vector3f::Constant(0), unsigned int samples = 1);
 Vector3f gyro_xyz(unsigned int samples = 1);
 Quaternionf estimate(bool include_yaw_fpk = true);
 float interp_yaw_fpk();
@@ -42,6 +44,7 @@ float interp_yaw_fpk();
 // Control functions
 void position_control(Quaternionf& error, Quaternionf& meas);
 void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref);
+void closed_trajectory_control(Quaternionf& ref_q, Quaternionf& meas_q, Vector3f& ypr_velocity_ref);
 
 // Conversions
 long actuator_to_motor_position(float act);
@@ -49,17 +52,43 @@ float actuator_to_motor_speed(float act);
 float motor_to_actuator_position(long mot);
 float motor_to_actuator_speed(float mot);
 
-// Angle conversions
-template <typename T>
-inline T clamp(T value, T low, T high) {
-    if (value < low)  return low;
-    if (value > high) return high;
-    return value;
-}
-
 Quaternionf ypr_to_q(const Vector3f& ypr);
 Vector3f q_to_ypr(const Quaternionf& q);
 Vector4f q_to_aa(const Quaternionf& q_in);
 Quaternionf aa_to_q(const Vector4f& aa);
 Matrix3f aa_to_R(const Vector4f& aa);
 Vector3f aa_to_xyz(const Vector4f& aa);
+
+// Printing helpers
+template<typename T, int N, int M>
+void print_eigen_matrix(Matrix<T, N, M>& mat) {
+  for (uint8_t i=0; i<mat.rows(); i++) {
+    for (uint8_t j=0; j<mat.cols(); j++) {
+      Serial.print(mat(i,j), 4);
+      Serial.print(", ");
+    }
+    if (M > 1) { // dont print newline if a row vector
+      Serial.println();
+    }
+  }
+}
+
+template<typename T>
+void print_std_vector(std::vector<T>& vec) {
+    for (uint8_t i=0; i<vec.size(); i++) {
+      Serial.print(vec[i], 4);
+      Serial.print(", ");
+    }
+    Serial.println();
+}
+
+template<typename T, int N>
+void print_vec_eigenvec(vector<Matrix<T, N, 1>>& vec) {
+  for (uint8_t i=0; i<vec.size(); i++) {
+    for (uint8_t j=0; j<vec[0].size(); j++) {
+      Serial.print(vec[i][j], 4);
+      Serial.print(", ");
+    }
+    Serial.println();
+  }
+}

@@ -2,10 +2,10 @@
 #include <queue>
 #include "SparkFunLSM6DSO.h"
 #include <math.h>
-#include "stepper_Driver.hpp"
+#include "stepper_driver.hpp"
 #include "CoaxialSPM.hpp"
 #include "sensor_fusion.hpp"
-
+#include "compensator.hpp"
 using namespace std;
 using namespace Eigen;
 
@@ -30,7 +30,7 @@ using namespace Eigen;
 #define DIR_3 8
 #define STEP_3 9 //PWM
 #define SLEEP_3 10
-#define MICROSTEP 8 // Microstepping is hardwired to 8 (M1/M0 set HIGH)
+#define MICROSTEP 4 // Microstepping is hardwired to 4
 #define MOTOR_STEPS 200 // Motor Steps per revolution
 #define MAX_SPEED 5000
 #define ROT_SCALE 5.2 // temporary pulley with 20 teeth
@@ -54,15 +54,19 @@ using namespace Eigen;
 #define TEST_STATE 5
 
 // Lookup table 
-#define FPK_NAN_CODE -999999
+#define FPK_NAN_CODE -999
 #define LOOKUP_TABLE_DIM 180
 #define LOOKUP_TABLE_SIZE 32400 // table dimension squared
 #define FPK_YAW_LOOKUP_TABLE
-// #define FPK_PITCH_LOOKUP_TABLE
-// #define FPK_ROLL_LOOKUP_TABLE
 
 // Control
-#define POSITION_ANGLE_TOLERANCE radians(0.25)
+#define POSITION_ANGLE_TOLERANCE radians(0.2)
+#define MIN_ACT_DIFF radians(25)
+
+extern PID position_compensator;
+extern PID traj_x_compensator;
+extern PID traj_y_compensator;
+extern PID traj_z_compensator;
 
 extern uint8_t state;
 extern uint8_t next_state;
@@ -88,6 +92,7 @@ extern unsigned long loop_time_proc;
 extern LSM6DSO platformIMU;
 extern Vector3f gyro_bias;
 extern KalmanFilter<float, 4, 4> kalman;
+extern KalmanFilter<float, 4, 4> kalman_predict;
 
 // Lookup table
 #ifdef FPK_YAW_LOOKUP_TABLE

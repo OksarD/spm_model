@@ -102,8 +102,7 @@ bool isclose(float a, float b, float tol) {
 // ================== Coaxial_SPM Class ================== //
 
 Coaxial_SPM::Coaxial_SPM(float a1_, float a2_, float b_)
-    : a1(a1_), a2(a2_), b(b_), u(0,0,-1), n_origin(0,0,1),
-      actuator_origin(solve_ipk(Matrix3f::Identity())[0]), actuator_direction(-1),
+    : a1(a1_), a2(a2_), b(b_), u(0,0,-1), n_origin(0,0,1), actuator_direction(-1),
       sin_a1(sin(a1_)), cos_a1(cos(a1_)),
       sin_a2(sin(a2_)), cos_a2(cos(a2_)),
       sin_b(sin(b_)), cos_b(cos(b_))
@@ -114,6 +113,7 @@ Coaxial_SPM::Coaxial_SPM(float a1_, float a2_, float b_)
         sin_eta.push_back(sin(eta_i(i)));
         cos_eta.push_back(cos(eta_i(i)));
     }
+    actuator_origin = solve_ipk(Matrix3f::Identity())[0];
 }
 
 Vector3f Coaxial_SPM::v_i_origin(int i) {
@@ -155,7 +155,6 @@ Vector3f Coaxial_SPM::solve_ipk(const Matrix3f& r) {
         v.push_back(r * v_origin[i]);
     }
     n = r * n_origin;
-
     vector<float> A(3), B(3), C(3);
     for (int i=0; i<3; i++) {
         A[i] = A_i_ipk(v[i], i);
@@ -170,6 +169,7 @@ Vector3f Coaxial_SPM::solve_ipk(const Matrix3f& r) {
         input_angle(i) = 2 * atan(T);
         w.push_back(w_i(input_angle(i), i));
     }
+
     #ifdef VERIFY_KINEMATICS
         verify_position();
     #endif

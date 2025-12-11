@@ -1,6 +1,7 @@
 #include "project.hpp"
 #include "helpers.hpp"
-//#include "SPI.h"
+
+#define SETTLE_UPDATES 50
 
 uint8_t state = IDLE_STATE;
 uint8_t next_state;
@@ -17,7 +18,7 @@ Coaxial_SPM spm(a1, a2, b);
 
 // Stepper motors should be arranged around the Z axis (anti-clockwise from birds-eye view),
 // starting with the motor connected to the +Y platform axis
-StepperDriver driver(NRF_TIMER4, TIMER4_IRQn, 6);
+StepperDriver driver(NRF_TIMER4, TIMER4_IRQn, 6, 7);
 StepperMotor stepper_0(STEP_1, DIR_1, SLEEP_1);
 StepperMotor stepper_1(STEP_2, DIR_2, SLEEP_2);
 StepperMotor stepper_2(STEP_3, DIR_3, SLEEP_3);
@@ -36,7 +37,7 @@ LSM6DSO platformIMU;
 Vector3f gyro_bias(0, 0, 0);
 
 // Kalman Filter
-Matrix4f Q = 1e-2 * Matrix4f::Identity();
+Matrix4f Q = 1e-4 * Matrix4f::Identity();
 Matrix4f R = 1 * Matrix4f::Identity();
 Vector3f origin(0.0f, 0.0f, 0.0f);
 Quaternionf x0_q = ypr_to_q(origin);
@@ -46,12 +47,18 @@ Matrix4f F0 = Matrix4f::Identity();
 Matrix4f H = Matrix4f::Identity();
 
 KalmanFilter<float, 4, 4> kalman(x0, P0, F0, H, Q, R);
-
+KalmanFilter<float, 4, 4> kalman_predict(x0, P0, F0, H, Q, R);
 // Lookup Table forward-kinematics
 float fpk_xy0 = spm.actuator_origin - PI;  // table is centered around actuator origin, and extends to +/- pi
 float fpk_dxy = 2 * PI / LOOKUP_TABLE_DIM;
 LookupTable2D fpk_yaw_table(fpk_xy0, fpk_xy0, fpk_dxy, fpk_dxy,
                             LOOKUP_TABLE_DIM, LOOKUP_TABLE_DIM, yaw_table);
+
+// controller
+PID position_compensator(1, 0, 0, 0.075, 0.5);
+PID traj_x_compensator(3, 25, 0.15, -1, 1, -0.3, 0.3, 3);
+PID traj_y_compensator(3, 25, 0.15, -1, 1, -0.3, 0.3, 3);
+PID traj_z_compensator(3, 25, 0.15, -1, 1, -0.3, 0.3, 3);
 
 void setup() {
   Serial.begin(115200);
@@ -104,9 +111,9 @@ void loop() {
   static bool movement_ongoing = false;
   char* command;
   if (loop_timing_proc()) {
-#ifdef DEBUG
+#ifdef TRACE
     if (state != IDLE_STATE) {
-      //Serial.println("============================ DEBUG ============================");
+      Serial.println("============================ TRACE ============================");
     }
 #endif
     // code to run every loop timing proc
@@ -149,23 +156,35 @@ void loop() {
         case 'H':
           {
             next_state = HOME_STATE;
+            position_compensator.reset();
             halt_motors();
-            reset_actuator_position();
 #ifdef INFO
             Serial.println("Device Homing... ");
 #endif
             delay(500); // let robot settle
-            gyro_bias = gyro_xyz(100);                                // average a lot of samples to accurately measure drift
-            kalman = KalmanFilter<float, 4, 4>(x0, P0, F0, H, Q, R);  // reset kalman filter
-            delay(2000);                                              // let kalman filter converge
+            gyro_bias = gyro_xyz(200);                                // average a lot of samples to accurately measure drift
+            kalman = KalmanFilter<float, 4, 4>(x0, P0, F0, H, Q, R);
+            kalman_predict = KalmanFilter<float, 4, 4>(x0, P0, F0, H, Q, R);  // reset kalman filter
+            Quaternionf est;
+            for (uint32_t i=0; i<SETTLE_UPDATES; i++) { // let kalman filter converge
+              est = estimate(false);
+              delayMicroseconds(LOOP_TIMING_INTERVAL);
+            }                 
             enable_loop_timing();
-#ifdef INFO
+#ifdef DEBUG
+            Vector3f est_ypr = q_to_ypr(est);
             Serial.print("Gyro drift: ");
             Serial.print(gyro_bias[0], 3);
             Serial.print(", ");
             Serial.print(gyro_bias[1], 3);
             Serial.print(", ");
             Serial.print(gyro_bias[2], 3);
+            Serial.print("\nConverged estimate: ");
+            Serial.print(est_ypr[0], 3);
+            Serial.print(", ");
+            Serial.print(est_ypr[1], 3);
+            Serial.print(", ");
+            Serial.print(est_ypr[2], 3);
             Serial.println();
 #endif
             break;
@@ -174,6 +193,7 @@ void loop() {
           {
             next_state = POSITION_STATE;
             enable_loop_timing();
+            position_compensator.reset();
 #ifdef INFO
             Serial.println("Position Control Enabled. Command (MY<>P<>R<>)");
 #endif
@@ -183,6 +203,9 @@ void loop() {
           {
             next_state = TRAJECTORY_CLOSED_STATE;
             enable_loop_timing();
+            traj_x_compensator.reset();
+            traj_y_compensator.reset();
+            traj_z_compensator.reset();
 #ifdef INFO
             Serial.println("Closed-Loop Trajectory Control Enabled. Command (MY<>P<>R<>y<>p<>r<>)");
 #endif
@@ -208,7 +231,7 @@ void loop() {
         case 'I':
           {
             next_state = IDLE_STATE;
-#ifdef INFO
+#ifdef DEBUG
             Serial.println("Device Idle.");
 #endif
             break;
@@ -238,9 +261,11 @@ void loop() {
           Quaternionf error = (ref_q * meas.conjugate()).normalized();
           position_control(error, meas);
           // reset actuator position after homed
-          if (q_to_aa(error)[0] < POSITION_ANGLE_TOLERANCE) {
+
+          if (abs(q_to_aa(error)[0]) < POSITION_ANGLE_TOLERANCE) {
             next_state = IDLE_STATE;
             reset_actuator_position();
+            Serial.println("#F"); // send hash command to python script
 #ifdef INFO
             Serial.println("Homing done.");
 #endif
@@ -264,11 +289,11 @@ void loop() {
             Serial.println();
             #endif
             position_control(error, meas);
-            // move to idle state when done
-            if (q_to_aa(error)[0] < POSITION_ANGLE_TOLERANCE) {
-#ifdef INFO
-              movement_ongoing = false;
+            if (abs(q_to_aa(error)[0]) < POSITION_ANGLE_TOLERANCE) {
+              Serial.println("#F"); // send hash command to python script
               halt_motors();
+              movement_ongoing = false;
+#ifdef INFO
               Serial.print("Moved to ");
               Serial.print(ypr_ref[0]);
               Serial.print(", ");
@@ -284,8 +309,19 @@ void loop() {
       case TRAJECTORY_OPEN_STATE:
         {
           if (movement_ongoing) {
-            //Vector3f ypr_meas = ypr_estimate(); // does the measurement delay make a difference?
             open_trajectory_control(ypr_ref, ypr_velocity_ref);
+          } else {
+            halt_motors();
+          }
+          break;
+        }
+      case TRAJECTORY_CLOSED_STATE:
+        {
+          if (movement_ongoing) {
+            Quaternionf meas_q = estimate();
+            Quaternionf ref_q = ypr_to_q(ypr_ref);
+
+            closed_trajectory_control(ref_q, meas_q, ypr_velocity_ref);
           } else {
             halt_motors();
           }
@@ -297,13 +333,13 @@ void loop() {
           static bool print_gyro = false;
           static bool print_kalman = false;
 
-          if (hasChar(command, '0')) {
+          if (hasChar(command, ')')) { // shift+0
             test_motor(stepper_0, 0);
           }
-          if (hasChar(command, '1')) {
+          if (hasChar(command, '!')) { // shift+1
             test_motor(stepper_1, 1);
           }
-          if (hasChar(command, '2')) {
+          if (hasChar(command, '@')) { // shift+2
             test_motor(stepper_2, 2);
           }
           if (hasChar(command, 'A')) {
@@ -314,6 +350,30 @@ void loop() {
           }
           if (hasChar(command, 'K')) {
             print_kalman = !print_kalman;
+          }
+          if (hasChar(command, 'F')) {
+            // test actuator values for fpk table
+            float fpk_yaw = interp_yaw_fpk();
+            Serial.print("act_pos: ");
+            Serial.print(actuator_position()[0]);
+            Serial.print(", ");
+            Serial.print(actuator_position()[1]);
+            Serial.print(", ");
+            Serial.print(actuator_position()[2]);
+            Serial.print("\nfpk_yaw test ");
+            Serial.println(fpk_yaw, 3);
+          }
+          if (hasChar(command, 'f')) {
+            uint32_t i = uint32_t(ExtractValue(command, 'f'));
+            uint32_t j = uint32_t(ExtractValue(command, ','));
+            // test actuator values for fpk table
+            float fpk_yaw = fpk_yaw_table.at(i,j);
+            Serial.print("i, j: ");
+            Serial.print(i);
+            Serial.print(", ");
+            Serial.print(j);
+            Serial.print("\nfpk_yaw test (index) ");
+            Serial.println(fpk_yaw, 3);
           }
 
           // Printing

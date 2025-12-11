@@ -27,7 +27,7 @@ def main():
     # Desired angle in ypr (rad/s)
     yaw = 0
     pitch = 0
-    roll = 0
+    roll = -0.75
     ypr = np.array([wrap_rad(yaw),wrap_rad(pitch),wrap_rad(roll)])
     R_ypr = spm.R_ypr(ypr)
     print("R_ypr ", R_ypr)
@@ -41,14 +41,24 @@ def main():
     print("w_xyz", w_xyz)
 
     # solve kinematics
-    actuator_angles = spm.solve_ipk(R_ypr)
+    print("angle_between:", spm.angle_between_v)
+    print("act_origin:", spm.actuator_origin)
+
+    #actuator_angles = spm.solve_ipk(R_ypr)
+    actuator_angles = [-1.36, -1.36, 0.23]
+    actuator_angles[0] = wrap_rad(actuator_angles[0])
+    actuator_angles[1] = wrap_rad(actuator_angles[1])
+    actuator_angles[2] = wrap_rad(actuator_angles[2])
+    up = np.array([0,0,1])
+    slope = angle_between(up, spm.n)
+    print("slope (deg)", degrees(slope))
+    print("act_angles:", actuator_angles)
     actuator_velocity = spm.solve_ivk(R_ypr, w_xyz)
-    #ypr_fpk = spm.solve_fpk(actuator_angles)
+    ypr_fpk = spm.solve_fpk(actuator_angles)
 
     # verify positional kinematics with matching rotation matrices
     print("ypr:", ypr)
-    #print("fpk_ypr:", ypr_fpk)
-    print("act_angles:", actuator_angles)
+    print("fpk_ypr:", ypr_fpk)
     # verify Jacobian and ypr_to_xyz transformation functions with a 
     # discrete approximation based on positional kinematics
     # dt_epsilon = 1e-6 # arbitrarily small time change
@@ -71,9 +81,9 @@ def main():
         # print("Joint %i" % i)
         # print("Actuator angle: %.2f" % (actuator_angles[i]))
         # print("Actuator velocity: %.2f" % (actuator_velocity[i]))
-        plot_vector(spm.v[i], v_colours[i], ax)
-        plot_vector(spm.w[i], w_colours[i], ax)
-        # plot_vector(spm.v_fpk[i], fpk_v_colours[i], ax)
+        # plot_vector(spm.v[i], v_colours[i], ax)
+        # plot_vector(spm.w[i], w_colours[i], ax)
+        plot_vector(spm.v_fpk[i], fpk_v_colours[i], ax)
 
     # plot graph
     ax.set_xlabel('X Axis')

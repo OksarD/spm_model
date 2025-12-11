@@ -11,7 +11,9 @@ using namespace Eigen;
 
 // Kalman filter class and related functions
 
-Matrix4f gyro_transition_matrix(Vector3f& gyro_xyz, float dt);
+Vector4f gyro_predict_f(Vector4f& x, Matrix4f& omega, float dt);
+Matrix4f gyro_jacobian_F(Matrix4f& omega, float dt);
+Matrix4f omega(Vector3f& gyro);
 
 template <typename T, int N, int M>
 class KalmanFilter {
@@ -39,7 +41,7 @@ public:
                  const StateMatrix& Q_,
                  const MeasurementCov& R_);
 
-    void predict();
+    void predict(Vector3f gyro, float dt);
 
     void correct(const MeasurementVector& z);
 
@@ -56,8 +58,10 @@ KalmanFilter<T, N, M>::KalmanFilter(const StateVector& x0,
         : x(x0), P(P0), F(F_), Q(Q_), H(H_), R(R_) {}
 
 template <typename T, int N, int M>
-void KalmanFilter<T, N, M>::predict() {
-    x = F * x;
+void KalmanFilter<T, N, M>::predict(Vector3f gyro, float dt) {
+    Matrix4f om = omega(gyro);
+    x = gyro_predict_f(x, om, dt);
+    Matrix4f F = gyro_jacobian_F(om, dt);
     P = F * P * F.transpose() + Q;
 }
 
@@ -74,6 +78,8 @@ template <typename T, int N, int M>
 Matrix<T, N, 1>& KalmanFilter<T, N, M>::state() { 
     return x; 
 }
+
+// forward-kinematic lookup table class
 
 class LookupTable2D {
 public:
@@ -114,10 +120,10 @@ public:
              + f11 * tx       * ty;
     }
 
-private:
     inline float at(size_t i, size_t j) const {
-        return data_[j * nx_ + i];  // Row-major
+        return data_[i * ny_ + j];  // Column-major
     }
+private:
 
     const float* data_;
     float x0_, y0_;

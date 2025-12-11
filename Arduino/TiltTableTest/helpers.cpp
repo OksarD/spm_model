@@ -51,9 +51,9 @@ Vector3f extract_velocity(char* command) {
 }
 
 void disable_motors(){
-  stepper_0.enable();
-  stepper_1.enable();
-  stepper_2.enable();
+  stepper_0.disable();
+  stepper_1.disable();
+  stepper_2.disable();
   halt_motors();
   #ifdef DEBUG
   Serial.println("Motors Disabled.");
@@ -117,16 +117,16 @@ void reset_actuator_position() {
 }
 
 Vector3f actuator_position() {
-  Vector3f pos(motor_to_actuator_position(stepper_0.position),
-          motor_to_actuator_position(stepper_1.position),
-          motor_to_actuator_position(stepper_2.position)
+  Vector3f pos(motor_to_actuator_position(static_cast<long>(stepper_0.position)),
+          motor_to_actuator_position(static_cast<long>(stepper_1.position)),
+          motor_to_actuator_position(static_cast<long>(stepper_2.position))
   );
   return pos;
 }
 
 void enable_loop_timing() {
   loop_timing_enabled = true;
-  loop_start_time = micros();
+  loop_start_time = micros() - LOOP_TIMING_INTERVAL; // instantiate one sample behind so the first movement command is at zero
   loop_time_proc = 0;
   #ifdef DEBUG
   Serial.println("Loop timing enabled.");
@@ -146,7 +146,7 @@ bool loop_timing_proc() {
   if (!loop_timing_enabled) {
     return true; // always allow loop function when loop timing is disabled
   } else {
-    loop_time_elapsed = micros() - loop_start_time; // elapsed time since session start
+    loop_time_elapsed = micros() - loop_start_time - LOOP_TIMING_INTERVAL; // elapsed time since session start
     if (loop_time_elapsed - loop_time_proc > LOOP_TIMING_INTERVAL) {
       loop_time_proc += LOOP_TIMING_INTERVAL;
       #ifdef TRACE
@@ -161,13 +161,14 @@ bool loop_timing_proc() {
 
 // Estimation functions
 
-Vector3f accel_ypr(unsigned int samples) {
+Vector3f accel_ypr(const Vector3f& gyro, unsigned int samples) {
+  float centrip_g = pow(gyro.norm(), 2) * 0.016 * 9.8067;
   Vector3f accel(0,0,0);
   // Get average accel reading
   for(uint8_t i=0; i<samples; i++) {
     accel[0] += platformIMU.readFloatAccelX();
     accel[1] += platformIMU.readFloatAccelY();
-    accel[2] += platformIMU.readFloatAccelZ();
+    accel[2] += platformIMU.readFloatAccelZ() - centrip_g;
   }
   if(samples > 1) {
     accel /= samples;
@@ -194,71 +195,47 @@ Vector3f gyro_xyz(unsigned int samples) {
 }
 
 Quaternionf estimate(bool include_yaw_fpk) {
-  Vector3f ypr_meas = accel_ypr();
+  Vector3f gyro = gyro_xyz() - gyro_bias;
+  Vector3f ypr_meas = accel_ypr(gyro);
   if (include_yaw_fpk) { 
     ypr_meas[0] = interp_yaw_fpk();
   }
   Quaternionf q_meas = ypr_to_q(ypr_meas);
-  Vector3f gyro = gyro_xyz() - gyro_bias;
-  kalman.F = gyro_transition_matrix(gyro, LOOP_TIMING_INTERVAL/1e6);
-  kalman.predict();
-  #ifdef TRACE
-  Serial.print("0, ");
-  Serial.print(gyro[0]);
-  Serial.print(", ");
-  Serial.print(gyro[1]);
-  Serial.print(", ");
-  Serial.print(gyro[2]);
-  Serial.print(", 1, ");
-  Serial.print(ypr_meas[0]);
-  Serial.print(", ");
-  Serial.print(ypr_meas[1]);
-  Serial.print(", ");
-  Serial.print(ypr_meas[2]);
-  Serial.print(", 2, ");
-  Serial.print(q_meas.w(), 3);
-  Serial.print(", ");
-  Serial.print(q_meas.x(), 3);
-  Serial.print(", ");
-  Serial.print(q_meas.y(), 3);
-  Serial.print(", ");
-  Serial.print(q_meas.z(), 3);
-  Serial.print(", 3, ");
-  Serial.print(kalman.state()[0], 3);
-  Serial.print(", ");
-  Serial.print(kalman.state()[1], 3);
-  Serial.print(", ");
-  Serial.print(kalman.state()[2], 3);
-  Serial.print(", ");
-  Serial.print(kalman.state()[3], 3);
-  #endif
+
+  kalman.predict(gyro, LOOP_TIMING_INTERVAL/1e6);
   kalman.correct(Vector4f(q_meas.w(),q_meas.x(), q_meas.y(), q_meas.z()));
   kalman.x /= kalman.x.norm();
+  Quaternionf est = Quaternionf(kalman.x[0], kalman.x[1], kalman.x[2], kalman.x[3]);
   #ifdef TRACE
-  Serial.print(", 4, ");
-  Serial.print(kalman.state()[0], 3);
-  Serial.print(", ");
-  Serial.print(kalman.state()[1], 3);
-  Serial.print(", ");
-  Serial.print(kalman.state()[2], 3);
-  Serial.print(", ");
-  Serial.print(kalman.state()[3], 3);
+  // evaluate kalman filter with these prints
+  // second kalman filter to only predict to evaluate accumulated error
+  kalman_predict.predict(gyro, LOOP_TIMING_INTERVAL/1e6);
+  kalman_predict.x /= kalman_predict.x.norm();
+  if (state == POSITION_STATE) { kalman_predict.correct(Vector4f(q_meas.w(),q_meas.x(), q_meas.y(), q_meas.z())); }
+  Vector3f pred = q_to_ypr(Quaternionf(kalman_predict.x[0], kalman_predict.x[1], kalman_predict.x[2], kalman_predict.x[3])); // predict step for debugging
+  Vector3f est_ypr = q_to_ypr(est);
+  Serial.print(loop_time_elapsed);
+  print_eigen_matrix(est_ypr);
+  print_eigen_matrix(ypr_meas);
+  print_eigen_matrix(pred);
   Serial.println();
   #endif
-  return Quaternionf(kalman.x[0], kalman.x[1], kalman.x[2], kalman.x[3]);
+  return est;
 }
 
 float interp_yaw_fpk() {
   Vector3f act_pos = actuator_position();
-  float offset = spm.actuator_direction*(act_pos[0] - spm.actuator_origin);
+  float offset = - act_pos[0] + spm.actuator_origin;
   Vector3f actuator_offset = act_pos + Vector3f::Constant(offset); // offset the actuator position such that m0 is placed at the origin
   float yaw_offset = fpk_yaw_table.interp(actuator_offset[1], actuator_offset[2]); // fpk table is in the m1/m2 domain
-  if (yaw_offset < -PI || yaw_offset > PI) { // if yaw value out-of-bounds (NAN)
+  if (yaw_offset < -PI || yaw_offset > PI ||
+  abs(act_pos[0] - act_pos[1] + (2*PI/3)) < MIN_ACT_DIFF || abs(act_pos[1] - act_pos[2] + (2*PI/3)) < MIN_ACT_DIFF || abs(act_pos[2] - act_pos[0] + (2*PI/3)) < MIN_ACT_DIFF) { // if yaw value out-of-bounds (NAN)
     disable_motors();
     next_state = IDLE_STATE;
     Serial.println("Platform Out of Bounds! Ensure that position commands have less than a 40 degree slope.");
     return FPK_NAN_CODE;
   }
+
   #ifdef TRACE
   Serial.print("act_pos: ");
   Serial.print(act_pos[0], 3);
@@ -285,11 +262,13 @@ float interp_yaw_fpk() {
 
 // Control functions
 void position_control(Quaternionf& error, Quaternionf& meas) {
-  if (error.w() < 0.0f) {
-    error.coeffs() *= -1.0f;  // ensure shortest rotation
+  Vector4f error_aa = q_to_aa(error);
+  if (error_aa[0] < 0) {
+    error_aa *= -1;  // ensure positive angular errors only
   }
-  Vector3f error_xyz = aa_to_xyz(q_to_aa(error));
-  Vector3f control = 0.5 * error_xyz;
+  float compensated_error = position_compensator.update(error_aa[0], LOOP_TIMING_INTERVAL/1e6); // compensate for the angle and not direction
+  error_aa[0] = compensated_error;
+  Vector3f control = aa_to_xyz(error_aa);
   Matrix3f R = aa_to_R(q_to_aa(meas));
   Vector3f actuator_velocity = spm.solve_ivk(R, control);
   set_actuator_velocity(actuator_velocity);
@@ -322,17 +301,43 @@ void position_control(Quaternionf& error, Quaternionf& meas) {
 
 void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref) {
   Matrix3f R_mat = spm.R_ypr(ypr_ref);
+
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_velocity_ref, ypr_ref);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
   set_actuator_velocity(actuator_velocity);
   #ifdef INFO
+  Vector3f ypr_meas = q_to_ypr(estimate());
   Serial.print(loop_time_elapsed);
   Serial.print(",");
-  Serial.print(actuator_velocity[0], 3);
+  print_eigen_matrix(ypr_ref);
+  print_eigen_matrix(ypr_meas);
+  Serial.println();
+  #endif
+}
+
+void closed_trajectory_control(Quaternionf& ref_q, Quaternionf& meas_q, Vector3f& ypr_velocity_ref) {
+  Vector3f error_xyz = aa_to_xyz(q_to_aa((ref_q * meas_q.conjugate()).normalized()));
+  // apply compensator to cartesian components
+  float dt = LOOP_TIMING_INTERVAL/1e6;
+  Vector3f control(traj_x_compensator.update(error_xyz.x(), dt),
+                  traj_y_compensator.update(error_xyz.y(), dt),
+                  traj_z_compensator.update(error_xyz.z(), dt)
+                  );
+  
+  // velocity feedforward
+  Vector3f xyz_vel_ref = spm.ypr_to_xyz_velocity(ypr_velocity_ref, q_to_ypr(ref_q));
+  Matrix3f R_mat = aa_to_R(q_to_aa(meas_q));
+  
+  // combine open and closed loop signals
+  Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_vel_ref + control);
+  set_actuator_velocity(actuator_velocity);
+  #ifdef INFO
+  Vector3f ypr_meas = q_to_ypr(meas_q);
+  Vector3f ypr_ref = q_to_ypr(ref_q);
+  Serial.print(loop_time_elapsed);
   Serial.print(",");
-  Serial.print(actuator_velocity[1], 3);
-  Serial.print(",");
-  Serial.print(actuator_velocity[2], 3);
+  print_eigen_matrix(ypr_ref);
+  print_eigen_matrix(ypr_meas);
   Serial.println();
   #endif
 }
@@ -379,6 +384,7 @@ float motor_to_actuator_speed(float mot) {
   return 2*PI*mot/(spm.actuator_direction*MICROSTEP*ROT_SCALE*MOTOR_STEPS);
 }
 
+// Euler angles (yaw-pitch-roll) to quaternion
 Quaternionf ypr_to_q(const Vector3f& ypr) {
     static Quaternionf q_prev = Quaternionf::Identity();
     float sin_y_2 = sin(ypr[0]*0.5);
@@ -399,6 +405,7 @@ Quaternionf ypr_to_q(const Vector3f& ypr) {
     return q.normalized();
 }
 
+// Quaternion to euler angles (yaw-pitch-roll)
 Vector3f q_to_ypr(const Quaternionf& q) {
     Quaternionf qn = q.normalized();
     float w = qn.w(), x = qn.x(), y = qn.y(), z = qn.z();
@@ -412,24 +419,19 @@ Vector3f q_to_ypr(const Quaternionf& q) {
     return Vector3f(yaw, pitch, roll);
 }
 
+// Quaternion to axis-angle [a, x, y, z]
 Vector4f q_to_aa(const Quaternionf& q_in) {
     Quaternionf q = q_in.normalized();
     // Ensure numerical stability
     float angle = 2.0f * acos(clamp(q.w(), -1.0f, 1.0f));
     float s = sqrt(1.0f - q.w() * q.w());
-    Vector3f axis;
-    if (s < 1e-6f) {
-        // If the angle is very small, the axis direction doesn’t matter much
-        axis = Vector3f(1.0f, 0.0f, 0.0f);
-    } else {
-        axis = q.vec() / s;  // q.x, q.y, q.z normalized
-    }
+    Vector3f axis = q.vec() / s;  // q.x, q.y, q.z normalized
     Vector4f aa;
     aa << angle, axis.x(), axis.y(), axis.z();
     return aa;
 }
 
-// Axis-Angle to Quaternion
+// Axis-Angle [a, x, y, z] to Quaternion
 Quaternionf aa_to_q(const Vector4f& aa) {
     float angle = aa(0);
     Vector3f axis = aa.tail<3>();
@@ -443,6 +445,7 @@ Quaternionf aa_to_q(const Vector4f& aa) {
     return Quaternionf(c, axis.x() * s, axis.y() * s, axis.z() * s);
 }
 
+// Axis-angle [a, x, y, z] to rotation matrix
 Matrix3f aa_to_R(const Vector4f& aa)
 {
     float angle = aa(0);
@@ -470,6 +473,7 @@ Matrix3f aa_to_R(const Vector4f& aa)
     return R;
 }
 
+// Axis angle [a, x, y, z] to rotation vector
 Vector3f aa_to_xyz(const Vector4f& aa) {
   return Vector3f(aa[0]*aa[1], aa[0]*aa[2], aa[0]*aa[3]);
 }

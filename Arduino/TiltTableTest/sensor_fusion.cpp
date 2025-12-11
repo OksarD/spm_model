@@ -1,15 +1,21 @@
 #include "sensor_fusion.hpp"
 
-using namespace std;
-using namespace Eigen;
+// sensor fusion functions
 
-// ========== Utility Functions ==========
-
-Matrix4f gyro_transition_matrix(Vector3f& gyro_xyz, float dt) {
-    Matrix4f f;
-    f << 0, -gyro_xyz[0], -gyro_xyz[1], -gyro_xyz[2],
-            gyro_xyz[0], 0, gyro_xyz[2], -gyro_xyz[1],
-            gyro_xyz[1], -gyro_xyz[2], 0, gyro_xyz[0],
-            gyro_xyz[2], gyro_xyz[1], -gyro_xyz[0], 0;
-    return Matrix4f::Identity() + (dt/2) * f;
+Matrix4f omega(Vector3f& gyro) {
+    Matrix4f om;
+    om << 0, -gyro[0], -gyro[1], -gyro[2],
+             gyro[0], 0,  gyro[2], -gyro[1],
+             gyro[1], -gyro[2], 0,  gyro[0],
+             gyro[2],  gyro[1], -gyro[0], 0;
+    return om;
 }
+
+Vector4f gyro_predict_f(Vector4f& x, Matrix4f& omega, float dt) {
+    Vector4f x_new = x + 0.5 * omega * x * dt;
+    return x_new.normalized();
+};
+
+Matrix4f gyro_jacobian_F(Matrix4f& omega, float dt) {
+    return Matrix4f::Identity() + 0.5 * omega * dt;
+};
