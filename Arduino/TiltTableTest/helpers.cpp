@@ -206,7 +206,7 @@ Quaternionf estimate(bool include_yaw_fpk) {
   kalman.correct(Vector4f(q_meas.w(),q_meas.x(), q_meas.y(), q_meas.z()));
   kalman.x /= kalman.x.norm();
   Quaternionf est = Quaternionf(kalman.x[0], kalman.x[1], kalman.x[2], kalman.x[3]);
-  #ifdef DEBUG
+  #ifdef TRACE
   // evaluate kalman filter with these prints
   // second kalman filter to only predict to evaluate accumulated error
   kalman_predict.predict(gyro, LOOP_TIMING_INTERVAL/1e6);
@@ -216,7 +216,7 @@ Quaternionf estimate(bool include_yaw_fpk) {
   Vector3f est_ypr = q_to_ypr(est);
   Serial.print(loop_time_elapsed);
   print_eigen_matrix(est_ypr);
-  print_eigen_matrix(ype_meas);
+  print_eigen_matrix(ypr_meas);
   print_eigen_matrix(pred);
   Serial.println();
   #endif
@@ -236,7 +236,7 @@ float interp_yaw_fpk() {
     return FPK_NAN_CODE;
   }
 
-  #ifdef DEBUG
+  #ifdef TRACE
   Serial.print("act_pos: ");
   Serial.print(act_pos[0], 3);
   Serial.print(", ");
@@ -305,20 +305,12 @@ void open_trajectory_control(Vector3f& ypr_ref, Vector3f& ypr_velocity_ref) {
   Vector3f xyz_platform_velocity = spm.ypr_to_xyz_velocity(ypr_velocity_ref, ypr_ref);
   Vector3f actuator_velocity = spm.solve_ivk(R_mat, xyz_platform_velocity);
   set_actuator_velocity(actuator_velocity);
-  #ifdef DEBUG
-  estimate();
-  Vector3f m_speed(actuator_to_motor_speed(actuator_velocity[0]), 
-            actuator_to_motor_speed(actuator_velocity[2]), 
-            actuator_to_motor_speed(actuator_velocity[2])
-            );
-  Vector3f m_pos(static_cast<long>(stepper_0.position),static_cast<long>(stepper_1.position),static_cast<long>(stepper_2.position));
-  Vector3f act_pos = actuator_position();
+  #ifdef INFO
+  Vector3f ypr_meas = q_to_ypr(estimate());
   Serial.print(loop_time_elapsed);
   Serial.print(",");
-  print_eigen_matrix(actuator_velocity);
-  print_eigen_matrix(m_speed);
-  print_eigen_matrix(m_pos);
-  print_eigen_matrix(act_pos);
+  print_eigen_matrix(ypr_ref);
+  print_eigen_matrix(ypr_meas);
   Serial.println();
   #endif
 }
@@ -346,8 +338,6 @@ void closed_trajectory_control(Quaternionf& ref_q, Quaternionf& meas_q, Vector3f
   Serial.print(",");
   print_eigen_matrix(ypr_ref);
   print_eigen_matrix(ypr_meas);
-  print_eigen_matrix(control);
-  print_eigen_matrix(xyz_vel_ref);
   Serial.println();
   #endif
 }

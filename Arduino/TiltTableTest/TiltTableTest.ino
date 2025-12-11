@@ -113,7 +113,7 @@ void loop() {
   if (loop_timing_proc()) {
 #ifdef TRACE
     if (state != IDLE_STATE) {
-      Serial.println("============================ DEBUG ============================");
+      Serial.println("============================ TRACE ============================");
     }
 #endif
     // code to run every loop timing proc
